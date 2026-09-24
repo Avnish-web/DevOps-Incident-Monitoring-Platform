@@ -123,6 +123,23 @@ FOR UPDATE SKIP LOCKED;
 - The claimed checks run on a bounded executor pool (virtual threads if we move to
   Java 21), with a hard per-check timeout.
 
+**As implemented (Phase 5)** in `worker/scheduling`:
+
+- `MonitorClaimRepository` claims in **one statement** (`UPDATE … FROM (SELECT … FOR UPDATE SKIP
+  LOCKED) … RETURNING`). Moving `next_check_at` forward at claim time acts as a lease: if a worker
+  crashes mid-check, the monitor simply runs at its next interval. The claim uses plain SQL, so it
+  never bumps the JPA `version` a user's edit depends on. `Monitor` uses `@DynamicUpdate`, so API
+  edits don't overwrite scheduling columns.
+- `CheckScheduler` (a `SmartLifecycle`) holds one semaphore permit per pool thread and claims at most
+  as many monitors as it has free permits. A busy replica leaves due work for others instead of
+  queueing it. On shutdown it stops claiming, waits `WORKER_SHUTDOWN_GRACE` for in-flight checks,
+  then interrupts them.
+- Health: **liveness** includes `checkScheduler`, which is DOWN only if the polling loop stops making
+  progress. **Readiness** includes the DB. A database outage turns the worker unready and makes it
+  log retries, but never triggers restarts.
+- The worker validates the schema and never migrates it (`spring.flyway.enabled=false`). Start
+  the API first on a fresh database.
+
 Redis Streams were considered as the job queue. They were rejected for scheduling because the
 database would still have to decide which checks are due, and a second queue adds
 failure modes (lost messages, stuck pending entries) for no gain at this scale.

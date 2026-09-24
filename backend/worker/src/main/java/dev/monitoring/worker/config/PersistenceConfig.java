@@ -1,4 +1,4 @@
-package dev.monitoring.api.config;
+package dev.monitoring.worker.config;
 
 import dev.monitoring.common.CommonPersistenceConfiguration;
 import dev.monitoring.common.DatabasePasswordCheck;
@@ -8,10 +8,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 
-/**
- * Enables the shared JPA entities and repositories. Kept off the main application class so
- * sliced tests (e.g. {@code @WebMvcTest}) do not try to start JPA.
- */
+/** Enables the shared JPA entities and repositories. The worker never migrates the schema. */
 @Configuration(proxyBeanMethods = false)
 @Import(CommonPersistenceConfiguration.class)
 public class PersistenceConfig {

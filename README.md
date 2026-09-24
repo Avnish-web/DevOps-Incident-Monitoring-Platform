@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 4 — monitor CRUD REST API with SSRF-safe URL validation, on PostgreSQL.
+> **Status:** Phase 5 — monitor CRUD API plus a horizontally scalable worker that schedules checks.
 
 ## Architecture at a glance
 
@@ -24,8 +24,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 2 | Spring Boot backend | ✅ |
 | 3 | PostgreSQL database | ✅ |
 | 4 | Monitoring target CRUD | ✅ |
-| 5 | Monitoring worker | ⏳ |
-| 6 | Health checks & response-time measurement | |
+| 5 | Monitoring worker | ✅ |
+| 6 | Health checks & response-time measurement | ⏳ |
 | 7 | Incident detection | |
 | 8 | React dashboard | |
 | 9 | Monitoring history & charts | |
@@ -62,6 +62,21 @@ cd backend
 
 The `local` profile reads database settings from the root `.env`. Flyway migrates the
 schema on startup. If a native PostgreSQL already uses port 5432, set `DB_PORT=5433` in `.env`.
+
+### Running the worker
+
+Start the API first: it owns schema migrations. Then, in another terminal:
+
+```bash
+cd backend
+./mvnw -pl worker -am install -DskipTests
+./mvnw -pl worker spring-boot:run -Dspring-boot.run.profiles=local
+curl localhost:8082/actuator/health/readiness
+```
+
+The worker claims due monitors from PostgreSQL (`FOR UPDATE SKIP LOCKED`), so any number
+of instances can run side by side; give each its own `WORKER_MANAGEMENT_PORT`. In this
+phase a check is only dispatched and logged. The real HTTP check arrives in Phase 6.
 
 | Port | Purpose |
 |------|---------|

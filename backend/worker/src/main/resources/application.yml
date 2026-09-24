@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: monitoring-worker
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}
+    username: ${POSTGRES_USER:monitoring}
+    # Intentionally no default: startup fails fast if the password is not provided.
+    password: ${POSTGRES_PASSWORD}
+    hikari:
+      pool-name: worker-pool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 5000 # ms
+  jdbc:
+    template:
+      # A hung query must not block the polling loop forever.
+      query-timeout: 10s
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # The API owns migrations; the worker only validates the schema it finds.
+    enabled: false
+
+server:
+  # The worker has no public API: this port serves only internal management endpoints.
+  port: ${WORKER_MANAGEMENT_PORT:8082}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        liveness:
+          include: livenessState,checkScheduler
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: false
+
+monitoring:
+  worker:
+    scheduler-enabled: ${WORKER_SCHEDULER_ENABLED:true}
+    poll-interval: ${WORKER_POLL_INTERVAL:1s}
+    batch-size: ${WORKER_BATCH_SIZE:50}
+    concurrency: ${WORKER_CONCURRENCY:20}
+    shutdown-grace: ${WORKER_SHUTDOWN_GRACE:20s}
+
+logging:
+  structured:
+    format:
+      console: ecs

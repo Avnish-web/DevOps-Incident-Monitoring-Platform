@@ -13,11 +13,19 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** A monitored target and its current check state. Mapped to the {@code monitors} table. */
+/**
+ * A monitored target and its current check state. Mapped to the {@code monitors} table.
+ *
+ * <p>{@code @DynamicUpdate} makes Hibernate write only changed columns. The worker updates
+ * scheduling/state columns with direct SQL, so a configuration edit from the API must not
+ * write back stale values for columns it did not touch.
+ */
 @Entity
 @Table(name = "monitors")
+@DynamicUpdate
 public class Monitor {
 
     @Id

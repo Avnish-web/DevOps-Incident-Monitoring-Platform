@@ -1,0 +1,14 @@
+# Developer profile: human-readable console logs; database settings from the root .env.
+spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
+
+logging:
+  structured:
+    format:
+      console: ""
+  pattern:
+    level: "%5p [%X{monitorId:-}]"

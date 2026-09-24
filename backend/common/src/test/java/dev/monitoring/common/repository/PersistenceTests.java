@@ -70,6 +70,21 @@ class PersistenceTests {
     }
 
     @Test
+    void entityUpdateDoesNotOverwriteColumnsChangedByTheWorker() {
+        Monitor monitor = monitors.saveAndFlush(newMonitor());
+        // Simulate the worker advancing the schedule with direct SQL while the entity is loaded.
+        jdbc.update("UPDATE monitors SET next_check_at = '2099-01-01T00:00:00Z' WHERE id = ?",
+                monitor.getId());
+
+        monitor.setName("Renamed");
+        monitors.saveAndFlush(monitor);
+
+        Instant nextCheckAt = jdbc.queryForObject(
+                "SELECT next_check_at FROM monitors WHERE id = ?", Instant.class, monitor.getId());
+        assertThat(nextCheckAt).isEqualTo(Instant.parse("2099-01-01T00:00:00Z"));
+    }
+
+    @Test
     void databaseRejectsIntervalBelowMinimum() {
         Monitor monitor = newMonitor();
         monitor.setIntervalSeconds(5);
