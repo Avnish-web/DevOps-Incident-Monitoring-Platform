@@ -1,5 +1,6 @@
 package dev.monitoring.worker.metrics;
 
+import dev.monitoring.common.domain.AlertChannelType;
 import dev.monitoring.worker.check.CheckOutcome;
 import dev.monitoring.worker.incident.IncidentStateMachine.Event;
 import io.micrometer.core.instrument.Counter;
@@ -78,6 +79,16 @@ public class WorkerMetrics {
     public void recordClaim(Duration lag) {
         claims.increment();
         schedulerLag.record(lag.isNegative() ? Duration.ZERO : lag);
+    }
+
+    /** @param result sent, retry, failed or cancelled */
+    public void recordAlertDelivery(AlertChannelType channelType, String result) {
+        Counter.builder("monitoring.alert.deliveries")
+                .description("Alert delivery attempts by channel type and result")
+                .tag("channel_type", channelType.name().toLowerCase(Locale.ROOT))
+                .tag("result", result)
+                .register(registry)
+                .increment();
     }
 
     public void recordIncident(Event event) {

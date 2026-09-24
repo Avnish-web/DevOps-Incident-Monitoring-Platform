@@ -8,7 +8,9 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,7 +18,8 @@ import java.util.concurrent.Executors;
 /** Local HTTP server (JDK built-in) with endpoints that simulate target behaviours. */
 public class TestHttpServer implements AutoCloseable {
 
-    public record Received(String method, String path, String userAgent) {
+    public record Received(String method, String path, String userAgent,
+                           Map<String, String> headers, String body) {
     }
 
     private final HttpServer server;
@@ -36,10 +39,19 @@ public class TestHttpServer implements AutoCloseable {
 
     private void handle(HttpExchange ex) throws IOException {
         String path = ex.getRequestURI().getPath();
+        Map<String, String> headers = new HashMap<>();
+        ex.getRequestHeaders().forEach((k, v) -> headers.put(k.toLowerCase(), v.get(0)));
+        String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         received.add(new Received(ex.getRequestMethod(), path,
-                ex.getRequestHeaders().getFirst("User-Agent")));
+                ex.getRequestHeaders().getFirst("User-Agent"), headers, body));
         try {
-            if (path.equals("/ok")) {
+            if (path.equals("/hook")) {
+                respond(ex, 204, null);
+            } else if (path.equals("/hook-fail")) {
+                respond(ex, 500, "receiver error");
+            } else if (path.equals("/hook-redirect")) {
+                redirect(ex, "/hook");
+            } else if (path.equals("/ok")) {
                 respond(ex, 200, "ok");
             } else if (path.startsWith("/status/")) {
                 int code = Integer.parseInt(path.substring("/status/".length()));

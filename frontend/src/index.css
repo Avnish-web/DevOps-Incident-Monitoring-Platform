@@ -122,3 +122,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
 .tabs .active { border-color: var(--primary); color: var(--primary); }
 .pagination { display: flex; gap: 1rem; align-items: center; justify-content: center; margin-top: 1rem; }
+
+.secret-box { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; margin: 1rem 0; border: 1px solid var(--pending); background: var(--pending-bg); border-radius: 8px; }
+.secret-box code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.secret-box > code { padding: 0.5rem; background: var(--surface); border-radius: 4px; }
+.secret-box button { align-self: flex-start; }
+.monitor-form + .table, .monitor-form + .error-banner { margin-top: 1.5rem; }

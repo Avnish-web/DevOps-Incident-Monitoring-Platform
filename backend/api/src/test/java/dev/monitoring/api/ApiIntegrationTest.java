@@ -16,7 +16,9 @@ import org.springframework.context.annotation.Import;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         // The container supplies the real credentials; the password check only needs a value.
-        properties = {"management.server.port=0", "POSTGRES_PASSWORD=provided-by-testcontainers"})
+        properties = {"management.server.port=0", "POSTGRES_PASSWORD=provided-by-testcontainers",
+                // Test-only key (32 zero bytes); real deployments generate their own.
+                "ALERT_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @Import({PostgresTestcontainer.class, FakeDnsConfig.class, FixedClockConfig.class})
 public @interface ApiIntegrationTest {
 }

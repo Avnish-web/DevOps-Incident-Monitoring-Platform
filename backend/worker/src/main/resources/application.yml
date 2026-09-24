@@ -68,6 +68,13 @@ monitoring:
       max-redirects: ${WORKER_HTTP_MAX_REDIRECTS:5}
       max-body-bytes: ${WORKER_HTTP_MAX_BODY:1MB}
       user-agent: ${WORKER_HTTP_USER_AGENT:monitoring-platform-worker/0.1}
+  alerting:
+    # Must match the API's key. Generate: openssl rand -base64 32
+    encryption-key: ${ALERT_ENCRYPTION_KEY:}
+    dispatch-interval: ${ALERT_DISPATCH_INTERVAL:5s}
+    max-attempts: ${ALERT_MAX_ATTEMPTS:8}
+    email:
+      from: ${ALERT_EMAIL_FROM:monitoring@localhost}
   retention:
     enabled: ${RETENTION_ENABLED:true}
     check-results-days: ${RETENTION_CHECK_RESULTS_DAYS:30}

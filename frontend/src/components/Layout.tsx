@@ -10,6 +10,7 @@ export function Layout() {
             Monitors
           </NavLink>
           <NavLink to="/incidents">Incidents</NavLink>
+          <NavLink to="/alerts">Alerts</NavLink>
         </nav>
       </header>
       <main className="app-main">

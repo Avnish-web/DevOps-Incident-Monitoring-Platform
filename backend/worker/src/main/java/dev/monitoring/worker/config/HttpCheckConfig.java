@@ -21,16 +21,24 @@ public class HttpCheckConfig {
         return HostResolver.SYSTEM;
     }
 
-    @Bean(destroyMethod = "close")
-    HttpChecker httpChecker(HttpCheckProperties http, TargetPolicyProperties policy,
-                            WorkerProperties worker, HostResolver hostResolver) {
+    /**
+     * SSRF-enforcing resolver shared by every outbound HTTP client in the worker (checks and
+     * alert webhooks), so both follow exactly the same address policy.
+     */
+    @Bean
+    GuardedDnsResolver guardedDnsResolver(TargetPolicyProperties policy, HostResolver hostResolver) {
         Predicate<InetAddress> isBlocked = BlockedAddresses::isBlocked;
         if (policy.allowPrivateAddresses()) {
-            log.warn("monitoring.targets.allow-private-addresses=true: checks may connect to "
-                    + "private and loopback addresses (SSRF protection DISABLED)");
+            log.warn("monitoring.targets.allow-private-addresses=true: checks and webhooks may "
+                    + "connect to private and loopback addresses (SSRF protection DISABLED)");
             isBlocked = address -> false;
         }
-        return new HttpChecker(http, new GuardedDnsResolver(hostResolver, isBlocked),
-                worker.concurrency());
+        return new GuardedDnsResolver(hostResolver, isBlocked);
+    }
+
+    @Bean(destroyMethod = "close")
+    HttpChecker httpChecker(HttpCheckProperties http, WorkerProperties worker,
+                            GuardedDnsResolver guardedDnsResolver) {
+        return new HttpChecker(http, guardedDnsResolver, worker.concurrency());
     }
 }

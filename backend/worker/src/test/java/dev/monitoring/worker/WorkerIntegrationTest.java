@@ -22,7 +22,10 @@ import org.springframework.context.annotation.Import;
                 "monitoring.retention.enabled=false",
                 "monitoring.targets.allow-private-addresses=true",
                 "spring.flyway.enabled=true",
-                "POSTGRES_PASSWORD=provided-by-testcontainers"})
+                "monitoring.alerting.dispatcher-enabled=false",
+                "POSTGRES_PASSWORD=provided-by-testcontainers",
+                // Test-only key (32 zero bytes); real deployments generate their own.
+                "ALERT_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
 @Import(PostgresTestcontainer.class)
 public @interface WorkerIntegrationTest {
 }

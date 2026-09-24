@@ -1,5 +1,6 @@
 package dev.monitoring.api.web;
 
+import dev.monitoring.api.alert.InvalidAlertTargetException;
 import dev.monitoring.common.net.InvalidTargetUrlException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Comparator;
@@ -92,6 +93,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpStatus.BAD_REQUEST, "Request validation failed");
         problem.setTitle("Invalid request");
         problem.setProperty("errors", List.of(new FieldViolation("url", ex.getMessage())));
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(InvalidAlertTargetException.class)
+    public ResponseEntity<Object> handleInvalidAlertTarget(InvalidAlertTargetException ex,
+                                                           WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Request validation failed");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", List.of(new FieldViolation("target", ex.getMessage())));
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
     }
 

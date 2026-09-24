@@ -198,13 +198,28 @@ DOWN --(M consecutive successes)--> UP    => resolve incident, emit INCIDENT_RES
 - Known limitation: a check already in flight when the target is changed can still count toward the
   new state once. The effect is at most one result.
 
-### 5.4 Alerting — Redis Stream for delivery
+### 5.4 Alerting — transactional outbox in PostgreSQL
 
-After the transaction commits, the worker publishes an event to the Redis stream
-`alerts:events`. An alert dispatcher (a consumer group inside the worker) delivers it to
-the configured channels, retrying with backoff and recording each attempt in PostgreSQL.
-If Redis is unavailable, the incident is still recorded. A reconciliation job re-emits
-events that were never delivered, using an outbox table.
+*(Design change in Phase 12: the original plan used a Redis Stream. The outbox alone gives the
+same asynchronous delivery without a second source of truth. Redis is used in Phase 13 for
+sessions and rate limiting instead.)*
+
+- When the recorder opens or resolves an incident, it inserts one `alert_deliveries` row per enabled
+  channel **in the same transaction**. Either the incident and its alerts commit together, or
+  neither does. A unique index on `(incident_id, event_type, channel_id)` makes this idempotent.
+- `AlertDispatcher` (worker) claims due rows with `FOR UPDATE SKIP LOCKED` and pushes
+  `next_attempt_at` forward as a lease. Failures retry with exponential backoff (30 s … 1 h, 8
+  attempts), then the row becomes `FAILED`. Delivery is at-least-once, and receivers can
+  de-duplicate on `X-Monitoring-Delivery`.
+- **Channels:** generic webhook (HMAC-SHA256 signature over `timestamp.body`, with the secret shown
+  once at creation), Slack incoming webhook (text escaped so monitor names cannot trigger
+  mentions), and e-mail via SMTP (subjects stripped of line breaks).
+- **Security:** channel targets and signing secrets are encrypted at rest with AES-256-GCM
+  (`ALERT_ENCRYPTION_KEY`), and the API only ever returns a masked preview. Webhook URLs get the SSRF
+  check on save and the guarded DNS resolver on send, with redirects disabled. Slack targets must
+  be `https://hooks.slack.com/services/...`.
+- Only real recoveries send a "resolved" alert. Incidents closed because a monitor was paused or
+  changed do not notify.
 
 ## 6. Data model (initial draft)
 

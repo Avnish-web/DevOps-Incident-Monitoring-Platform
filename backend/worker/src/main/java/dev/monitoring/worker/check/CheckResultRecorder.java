@@ -3,6 +3,8 @@ package dev.monitoring.worker.check;
 import dev.monitoring.common.domain.CheckResult;
 import dev.monitoring.common.domain.MonitorStatus;
 import dev.monitoring.common.repository.CheckResultRepository;
+import dev.monitoring.worker.alert.AlertOutbox;
+import dev.monitoring.worker.alert.AlertPayload;
 import dev.monitoring.worker.incident.IncidentStateMachine;
 import dev.monitoring.worker.incident.IncidentStateMachine.Event;
 import dev.monitoring.worker.incident.IncidentStateMachine.State;
@@ -35,15 +37,19 @@ public class CheckResultRecorder {
 
     private record MonitorRow(boolean enabled, MonitorStatus status, int consecutiveFailures,
                               int consecutiveSuccesses, int failureThreshold,
-                              int recoveryThreshold, Instant lastCheckedAt) {
+                              int recoveryThreshold, Instant lastCheckedAt, String name,
+                              String url) {
     }
 
     private final CheckResultRepository checkResults;
     private final JdbcTemplate jdbc;
+    private final AlertOutbox alerts;
 
-    public CheckResultRecorder(CheckResultRepository checkResults, JdbcTemplate jdbc) {
+    public CheckResultRecorder(CheckResultRepository checkResults, JdbcTemplate jdbc,
+                               AlertOutbox alerts) {
         this.checkResults = checkResults;
         this.jdbc = jdbc;
+        this.alerts = alerts;
     }
 
     /**
@@ -86,9 +92,9 @@ public class CheckResultRecorder {
                 next.consecutiveSuccesses(), checkedAt, monitor.id());
 
         switch (t.event()) {
-            case INCIDENT_OPENED -> openIncident(monitor.id(),
+            case INCIDENT_OPENED -> openIncident(row, monitor.id(),
                     streakStart(monitor.id(), next.consecutiveFailures()), describe(outcome));
-            case INCIDENT_RESOLVED -> resolveIncident(monitor.id(),
+            case INCIDENT_RESOLVED -> resolveIncident(row, monitor.id(),
                     streakStart(monitor.id(), next.consecutiveSuccesses()));
             case NONE -> { }
         }
@@ -98,7 +104,7 @@ public class CheckResultRecorder {
     private MonitorRow lockMonitor(UUID id) {
         List<MonitorRow> rows = jdbc.query("""
                 SELECT enabled, status, consecutive_failures, consecutive_successes,
-                       failure_threshold, recovery_threshold, last_checked_at
+                       failure_threshold, recovery_threshold, last_checked_at, name, url
                   FROM monitors WHERE id = ? FOR UPDATE
                 """, (rs, n) -> {
                     OffsetDateTime last = rs.getObject("last_checked_at", OffsetDateTime.class);
@@ -106,7 +112,8 @@ public class CheckResultRecorder {
                             MonitorStatus.valueOf(rs.getString("status")),
                             rs.getInt("consecutive_failures"), rs.getInt("consecutive_successes"),
                             rs.getInt("failure_threshold"), rs.getInt("recovery_threshold"),
-                            last == null ? null : last.toInstant());
+                            last == null ? null : last.toInstant(),
+                            rs.getString("name"), rs.getString("url"));
                 }, id);
         return rows.isEmpty() ? null : rows.get(0);
     }
@@ -125,20 +132,34 @@ public class CheckResultRecorder {
         return start.toInstant();
     }
 
-    private void openIncident(UUID monitorId, Instant startedAt, String cause) {
+    private void openIncident(MonitorRow row, UUID monitorId, Instant startedAt, String cause) {
         // The partial unique index guarantees a single open incident; never fail the result on it.
-        jdbc.update("""
+        List<UUID> created = jdbc.query("""
                 INSERT INTO incidents (monitor_id, started_at, cause) VALUES (?, ?, ?)
                 ON CONFLICT (monitor_id) WHERE resolved_at IS NULL DO NOTHING
-                """, monitorId, Timestamp.from(startedAt), cause);
+                RETURNING id
+                """, (rs, n) -> rs.getObject("id", UUID.class), monitorId, Timestamp.from(startedAt), cause);
+        for (UUID incidentId : created) {
+            alerts.enqueue(incidentId, AlertPayload.opened(Instant.now(), monitorId, row.name(),
+                    row.url(), incidentId, startedAt, cause));
+        }
     }
 
-    private void resolveIncident(UUID monitorId, Instant resolvedAt) {
-        jdbc.update("""
+    private void resolveIncident(MonitorRow row, UUID monitorId, Instant resolvedAt) {
+        List<AlertPayload> resolved = jdbc.query("""
                 UPDATE incidents
                    SET resolved_at = GREATEST(started_at, ?), resolution = 'RECOVERED'
                  WHERE monitor_id = ? AND resolved_at IS NULL
-                """, Timestamp.from(resolvedAt), monitorId);
+                RETURNING id, started_at, resolved_at, cause
+                """, (rs, n) -> AlertPayload.resolved(Instant.now(), monitorId, row.name(), row.url(),
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("started_at", OffsetDateTime.class).toInstant(),
+                        rs.getObject("resolved_at", OffsetDateTime.class).toInstant(),
+                        rs.getString("cause")),
+                Timestamp.from(resolvedAt), monitorId);
+        for (AlertPayload payload : resolved) {
+            alerts.enqueue(payload.incident().id(), payload);
+        }
     }
 
     private static String describe(CheckOutcome outcome) {

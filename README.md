@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 9 — dashboard with response-time charts and uptime history, SSRF-safe checks, incident detection.
+> **Status:** Phase 12 — checks, incidents, history, metrics, dashboards and e-mail/Slack/webhook alerting.
 
 ## Architecture at a glance
 
@@ -31,8 +31,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 9 | Monitoring history & charts | ✅ |
 | 10 | Prometheus metrics | ✅ |
 | 11 | Grafana dashboards | ✅ |
-| 12 | Alerting | ⏳ |
-| 13 | Authentication | |
+| 12 | Alerting | ✅ |
+| 13 | Authentication | ⏳ |
 | 14 | Docker Compose | |
 | 15 | Nginx | |
 | 16 | GitHub Actions CI/CD | |
@@ -148,6 +148,21 @@ provisioned from `infra/grafana/` (read-only in the UI, so edit the JSON in the 
 - **Checks:** checks/s by outcome, failures by error type, p50/p95 check duration, scheduler lag, checks in flight, incidents
 - **Services:** API/worker instances up, API 5xx rate, requests by status, p95 latency by endpoint, JVM heap, DB connections
 
+### Alerting
+
+Every enabled alert channel is notified when a monitor goes down and when it recovers. You
+manage channels on the **Alerts** page of the dashboard or through the API.
+
+- **E-mail:** the worker needs SMTP settings (`SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, optionally
+  `SPRING_MAIL_USERNAME`/`SPRING_MAIL_PASSWORD`, and `ALERT_EMAIL_FROM`). For local development,
+  `docker compose --profile dev up -d mailpit` catches mail at http://localhost:8025.
+- **Slack:** paste an incoming-webhook URL (`https://hooks.slack.com/services/...`).
+- **Webhook:** receives a JSON payload with an `X-Monitoring-Signature: sha256=<hex>` HMAC over
+  `X-Monitoring-Timestamp + "." + body`, using the secret shown once at creation.
+
+Channel targets are encrypted at rest with `ALERT_ENCRYPTION_KEY` (`openssl rand -base64 32`,
+same value for API and worker). Keep it safe: without it, stored channels cannot be decrypted.
+
 ## REST API
 
 | Method | Path | Description |
@@ -161,6 +176,10 @@ provisioned from `infra/grafana/` (read-only in the UI, so edit the JSON in the 
 | `GET` | `/api/v1/monitors/{id}/stats?range=1h\|24h\|7d\|30d` | Uptime %, avg/p50/p95/max latency and a bucketed time series |
 | `GET` | `/api/v1/incidents?status=OPEN\|RESOLVED&monitorId=…&page&size` | Incidents, newest first |
 | `GET` | `/api/v1/incidents/{id}` | One incident |
+| `POST` | `/api/v1/alert-channels` | Add an e-mail, Slack or webhook channel (webhooks return a signing secret once) |
+| `GET` / `PUT` / `DELETE` | `/api/v1/alert-channels[/{id}]` | List, update (target optional), delete |
+| `POST` | `/api/v1/alert-channels/{id}/test` | Queue a test notification → `202` |
+| `GET` | `/api/v1/alert-channels/{id}/deliveries` | Delivery history (status, attempts, last error) |
 
 A monitor goes `DOWN` and opens an incident after `failureThreshold` consecutive failed
 checks, and returns to `UP` (resolving the incident) after `recoveryThreshold` consecutive
