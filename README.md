@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 2 — API service skeleton (health checks, structured logging, error handling).
+> **Status:** Phase 3 — API service with PostgreSQL schema (Flyway), health checks, structured logging.
 
 ## Architecture at a glance
 
@@ -22,8 +22,8 @@ the scheduling model, incident state machine, data model, and security principle
 |---|-------|--------|
 | 1 | Project architecture | ✅ |
 | 2 | Spring Boot backend | ✅ |
-| 3 | PostgreSQL database | ⏳ |
-| 4 | Monitoring target CRUD | |
+| 3 | PostgreSQL database | ✅ |
+| 4 | Monitoring target CRUD | ⏳ |
 | 5 | Monitoring worker | |
 | 6 | Health checks & response-time measurement | |
 | 7 | Incident detection | |
@@ -51,10 +51,17 @@ the scheduling model, incident state machine, data model, and security principle
 ## Running the API locally
 
 ```bash
+cp .env.example .env              # then set a real POSTGRES_PASSWORD
+docker compose up -d --wait       # PostgreSQL 17 on 127.0.0.1:${DB_PORT}
+
 cd backend
-./mvnw verify                                   # build + tests
+./mvnw verify                     # build + tests (tests start their own PostgreSQL via Testcontainers)
+./mvnw -pl api -am install -DskipTests
 ./mvnw -pl api spring-boot:run -Dspring-boot.run.profiles=local
 ```
+
+The `local` profile reads database settings from the root `.env`. Flyway migrates the
+schema on startup. If a native PostgreSQL already uses port 5432, set `DB_PORT=5433` in `.env`.
 
 | Port | Purpose |
 |------|---------|

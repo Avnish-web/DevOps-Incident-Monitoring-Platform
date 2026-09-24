@@ -199,6 +199,13 @@ erDiagram
 
 `check_results` is the high-volume table. It has an index on `(monitor_id, checked_at DESC)` and a
 retention job (for example 30 days raw). Monthly partitioning can be added later without API changes.
+Its IDs come from a sequence allocated in blocks of 50, so Hibernate can batch inserts.
+
+The schema lives in `backend/common/src/main/resources/db/migration` (Flyway). The database enforces
+its own invariants: check constraints on intervals, timeouts and URL scheme, a consistent
+success/error pair on each result, and a partial unique index that allows **at most one open
+incident per monitor**. Ownership (`owner_id`, Phase 13) and alerting tables (Phase 12) arrive
+as later migrations; existing migrations are never edited.
 
 ## 7. API conventions
 
@@ -267,6 +274,6 @@ Configuration never contains a secret default value.
 | Java | 17 LTS (installed locally); Java 21 is a drop-in upgrade for virtual threads |
 | Framework | Spring Boot 4.1.x (Spring Framework 7), Maven 3.9 via wrapper |
 | DB migrations | Flyway |
-| Database / cache | PostgreSQL 16, Redis 7 |
+| Database / cache | PostgreSQL 17, Redis 7 |
 | Frontend | React 18+, TypeScript, Vite, TanStack Query, Recharts |
 | Testing | JUnit 5, Testcontainers, Vitest |

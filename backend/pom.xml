@@ -19,8 +19,19 @@
     <description>DevOps Incident &amp; Monitoring Platform - backend services</description>
 
     <modules>
+        <module>common</module>
         <module>api</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>dev.monitoring</groupId>
+                <artifactId>monitoring-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <properties>
         <java.version>17</java.version>

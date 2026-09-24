@@ -1,5 +1,14 @@
 # Developer profile: human-readable console logs instead of JSON.
 # Activate with SPRING_PROFILES_ACTIVE=local (or -Dspring-boot.run.profiles=local).
+spring:
+  config:
+    # Read database credentials from the repository-root .env file when running outside Docker.
+    # Paths cover running from the repo root, backend/, or backend/api (spring-boot:run).
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
+
 logging:
   structured:
     format:

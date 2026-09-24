@@ -4,6 +4,30 @@ spring:
   lifecycle:
     # Max time to let in-flight requests finish on shutdown (SIGTERM).
     timeout-per-shutdown-phase: 20s
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}
+    username: ${POSTGRES_USER:monitoring}
+    # Intentionally no default: startup fails fast if the password is not provided.
+    password: ${POSTGRES_PASSWORD}
+    hikari:
+      pool-name: api-pool
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 5000 # ms
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Schema is owned by Flyway; Hibernate only verifies the mapping matches it.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+  flyway:
+    # The API is the only service that migrates the schema (see docs/architecture.md §4).
+    enabled: true
+    locations: classpath:db/migration
 
 server:
   port: ${API_PORT:8080}
@@ -29,6 +53,11 @@ management:
       probes:
         enabled: true
       show-details: never
+      group:
+        # Not ready to receive traffic without the database. Liveness deliberately excludes
+        # it so a database outage does not cause restart loops.
+        readiness:
+          include: readinessState,db
   info:
     env:
       enabled: false

@@ -5,17 +5,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.monitoring.api.web.RequestIdFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /** Boots the full application on random ports and exercises it over real HTTP. */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "management.server.port=0")
+        // The container supplies the real credentials; the password check only needs a value.
+        properties = {"management.server.port=0", "POSTGRES_PASSWORD=provided-by-testcontainers"})
+@Import(PostgresTestcontainer.class)
 class MonitoringApiApplicationTests {
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     @LocalServerPort
     int serverPort;
@@ -41,6 +49,16 @@ class MonitoringApiApplicationTests {
                     .expectStatus().isOk()
                     .expectBody().jsonPath("$.status").isEqualTo("UP");
         }
+    }
+
+    @Test
+    void flywayMigratedSchemaOnStartup() {
+        Integer tables = jdbc.queryForObject("""
+                SELECT count(*) FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name IN ('monitors', 'check_results', 'incidents')
+                """, Integer.class);
+        assertThat(tables).isEqualTo(3);
     }
 
     @Test
