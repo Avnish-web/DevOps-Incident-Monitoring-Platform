@@ -8,11 +8,13 @@ import dev.monitoring.common.domain.CheckErrorType;
 import dev.monitoring.common.domain.CheckResult;
 import dev.monitoring.common.domain.HttpCheckMethod;
 import dev.monitoring.common.domain.Incident;
+import dev.monitoring.common.domain.IncidentResolution;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorStatus;
 import dev.monitoring.common.domain.MonitorType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -147,7 +149,7 @@ class PersistenceTests {
         Monitor monitor = monitors.saveAndFlush(newMonitor());
         Instant start = Instant.now().minusSeconds(60);
         Incident first = new Incident(monitor.getId(), start, "TIMEOUT");
-        first.resolve(start.plusSeconds(30));
+        first.resolve(start.plusSeconds(30), IncidentResolution.RECOVERED);
         incidents.saveAndFlush(first);
 
         Incident second = incidents.saveAndFlush(
@@ -155,6 +157,39 @@ class PersistenceTests {
 
         assertThat(second.isOpen()).isTrue();
         assertThat(incidents.count()).isEqualTo(2);
+    }
+
+    @Test
+    void resolvedIncidentRequiresResolution() {
+        Monitor monitor = monitors.saveAndFlush(newMonitor());
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO incidents (monitor_id, started_at, resolved_at)
+                VALUES (?, now() - interval '1 minute', now())""", monitor.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_incidents_resolution_iff_resolved");
+    }
+
+    @Test
+    void openIncidentCannotHaveResolution() {
+        Monitor monitor = monitors.saveAndFlush(newMonitor());
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO incidents (monitor_id, started_at, resolution)
+                VALUES (?, now(), 'RECOVERED')""", monitor.getId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_incidents_resolution_iff_resolved");
+    }
+
+    @Test
+    void resolveClampsToStartTime() {
+        Instant start = Instant.now();
+        Incident incident = new Incident(UUID.randomUUID(), start, "x");
+
+        incident.resolve(start.minusSeconds(5), IncidentResolution.RECOVERED);
+
+        assertThat(incident.getResolvedAt()).isEqualTo(start);
+        assertThat(incident.getResolution()).isEqualTo(IncidentResolution.RECOVERED);
     }
 
     @Test

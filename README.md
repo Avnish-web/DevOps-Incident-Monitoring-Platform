@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 6 — monitor CRUD API plus a horizontally scalable worker running SSRF-safe HTTP checks with response-time history.
+> **Status:** Phase 7 — SSRF-safe HTTP checks with response-time history and automatic incident detection.
 
 ## Architecture at a glance
 
@@ -26,8 +26,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 4 | Monitoring target CRUD | ✅ |
 | 5 | Monitoring worker | ✅ |
 | 6 | Health checks & response-time measurement | ✅ |
-| 7 | Incident detection | ⏳ |
-| 8 | React dashboard | |
+| 7 | Incident detection | ✅ |
+| 8 | React dashboard | ⏳ |
 | 9 | Monitoring history & charts | |
 | 10 | Prometheus metrics | |
 | 11 | Grafana dashboards | |
@@ -103,6 +103,14 @@ RFC 9457 Problem Details (`application/problem+json`).
 | `GET` | `/api/v1/monitors/{id}` | Get one → `ETag: "<version>"` |
 | `PUT` | `/api/v1/monitors/{id}` | Replace configuration; optional `If-Match` → `412` if stale |
 | `DELETE` | `/api/v1/monitors/{id}` | Delete monitor and its history → `204` |
+| `GET` | `/api/v1/incidents?status=OPEN\|RESOLVED&monitorId=…&page&size` | Incidents, newest first |
+| `GET` | `/api/v1/incidents/{id}` | One incident |
+
+A monitor goes `DOWN` and opens an incident after `failureThreshold` consecutive failed
+checks, and returns to `UP` (resolving the incident) after `recoveryThreshold` consecutive
+successes. Incidents report `startedAt` (first failure), `resolvedAt` (first success),
+`durationSeconds`, `cause`, and a `resolution` of `RECOVERED`, `MONITOR_PAUSED` or
+`MONITOR_CHANGED`.
 
 ```bash
 curl -X POST localhost:8080/api/v1/monitors -H "Content-Type: application/json" \

@@ -1,6 +1,5 @@
 package dev.monitoring.api.web;
 
-import dev.monitoring.api.monitor.MonitorNotFoundException;
 import dev.monitoring.common.net.InvalidTargetUrlException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Comparator;
@@ -96,11 +95,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
     }
 
-    @ExceptionHandler(MonitorNotFoundException.class)
-    public ResponseEntity<Object> handleMonitorNotFound(MonitorNotFoundException ex,
-                                                        WebRequest request) {
+    @ExceptionHandler(NotFoundException.class)
+    public ResponseEntity<Object> handleNotFound(NotFoundException ex, WebRequest request) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.NOT_FOUND, "Monitor not found");
+                HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Not Found");
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.NOT_FOUND, request);
     }

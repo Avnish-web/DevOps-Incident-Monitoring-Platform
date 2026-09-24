@@ -2,6 +2,8 @@ package dev.monitoring.common.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -34,6 +36,10 @@ public class Incident {
     @Column(length = 512)
     private String cause;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private IncidentResolution resolution;
+
     protected Incident() {
         // for JPA
     }
@@ -44,15 +50,18 @@ public class Incident {
         this.cause = cause == null || cause.length() <= 512 ? cause : cause.substring(0, 512);
     }
 
-    public void resolve(Instant at) {
+    /**
+     * Closes the incident. A time before {@code startedAt} is clamped to {@code startedAt}
+     * so the stored interval is never negative.
+     */
+    public void resolve(Instant at, IncidentResolution resolution) {
         Objects.requireNonNull(at, "at");
+        Objects.requireNonNull(resolution, "resolution");
         if (resolvedAt != null) {
             throw new IllegalStateException("Incident " + id + " is already resolved");
         }
-        if (at.isBefore(startedAt)) {
-            throw new IllegalArgumentException("resolvedAt must not be before startedAt");
-        }
-        this.resolvedAt = at;
+        this.resolvedAt = at.isBefore(startedAt) ? startedAt : at;
+        this.resolution = resolution;
     }
 
     public boolean isOpen() {
@@ -77,5 +86,9 @@ public class Incident {
 
     public String getCause() {
         return cause;
+    }
+
+    public IncidentResolution getResolution() {
+        return resolution;
     }
 }

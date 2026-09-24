@@ -2,9 +2,12 @@ package dev.monitoring.api.monitor;
 
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.api.web.PreconditionFailedException;
+import dev.monitoring.common.domain.IncidentResolution;
 import dev.monitoring.common.domain.Monitor;
+import dev.monitoring.common.domain.MonitorStatus;
 import dev.monitoring.common.domain.MonitorType;
 import dev.monitoring.common.net.TargetUrlValidator;
+import dev.monitoring.common.repository.IncidentRepository;
 import dev.monitoring.common.repository.MonitorRepository;
 import java.time.Instant;
 import java.util.Objects;
@@ -22,10 +25,13 @@ public class MonitorService {
     private static final Logger log = LoggerFactory.getLogger(MonitorService.class);
 
     private final MonitorRepository monitors;
+    private final IncidentRepository incidents;
     private final TargetUrlValidator urlValidator;
 
-    public MonitorService(MonitorRepository monitors, TargetUrlValidator urlValidator) {
+    public MonitorService(MonitorRepository monitors, IncidentRepository incidents,
+                          TargetUrlValidator urlValidator) {
         this.monitors = monitors;
+        this.incidents = incidents;
         this.urlValidator = urlValidator;
     }
 
@@ -57,7 +63,10 @@ public class MonitorService {
      *                        locking at flush time (HTTP 409).
      */
     public MonitorResponse update(UUID id, MonitorRequest request, Long expectedVersion) {
-        Monitor monitor = find(id);
+        // Row lock: the worker locks the same row when applying check results, so status
+        // and incident changes from both sides never interleave.
+        Monitor monitor = monitors.findByIdForUpdate(id)
+                .orElseThrow(() -> new MonitorNotFoundException(id));
         if (expectedVersion != null && expectedVersion != monitor.getVersion()) {
             throw new PreconditionFailedException(
                     "Monitor was modified by someone else; reload it and try again");
@@ -76,6 +85,12 @@ public class MonitorService {
         monitor.setTimeoutMs(request.timeoutMsOrDefault());
         applySettings(monitor, request);
 
+        boolean paused = wasEnabled && !monitor.isEnabled();
+        if (paused || checkChanged) {
+            // Past results no longer describe what is (or is not) being checked.
+            resetState(monitor, paused ? IncidentResolution.MONITOR_PAUSED
+                    : IncidentResolution.MONITOR_CHANGED);
+        }
         // Check soon so the user sees the effect of a changed target or a resumed monitor.
         if (monitor.isEnabled() && (checkChanged || !wasEnabled)) {
             monitor.setNextCheckAt(Instant.now());
@@ -83,6 +98,17 @@ public class MonitorService {
         Monitor saved = monitors.saveAndFlush(monitor);
         log.info("Updated monitor {}", id);
         return MonitorResponse.from(saved);
+    }
+
+    private void resetState(Monitor monitor, IncidentResolution reason) {
+        monitor.setStatus(MonitorStatus.UNKNOWN);
+        monitor.setConsecutiveFailures(0);
+        monitor.setConsecutiveSuccesses(0);
+        incidents.findByMonitorIdAndResolvedAtIsNull(monitor.getId()).ifPresent(incident -> {
+            incident.resolve(Instant.now(), reason);
+            log.info("Closed incident {} for monitor {}: {}", incident.getId(),
+                    monitor.getId(), reason);
+        });
     }
 
     public void delete(UUID id) {

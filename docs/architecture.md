@@ -179,6 +179,25 @@ DOWN --(M consecutive successes)--> UP    => resolve incident, emit INCIDENT_RES
   check result, so the state is always consistent.
 - The API can later add a `DEGRADED` state (latency threshold) without changing the model.
 
+**As implemented (Phase 7):**
+
+- The rules are a pure function (`worker/incident/IncidentStateMachine`). `CheckResultRecorder` applies
+  it in one transaction: insert result → `SELECT … FOR UPDATE` the monitor row → update status and
+  counters → open or resolve the incident. The API takes the same row lock when it edits a monitor,
+  so the two never interleave.
+- Only the **newest** result changes state. A check that finishes late, or one for a paused monitor,
+  is stored as history only.
+- `started_at` is the time of the *first* failure in the streak ("down since"), and `resolved_at` is
+  the *first* success of the recovery streak. They are not the moment the threshold was crossed.
+- A second open incident is impossible: the partial unique index enforces it, and the insert uses
+  `ON CONFLICT … DO NOTHING`, so it can never fail the recording transaction.
+- `incidents.resolution` records why an incident ended: `RECOVERED`, `MONITOR_PAUSED` (paused
+  while down), or `MONITOR_CHANGED` (URL, method, timeout or expected status changed while down).
+  Pausing or changing the check also resets the status to `UNKNOWN`. Renaming or changing thresholds
+  or the interval does not.
+- Known limitation: a check already in flight when the target is changed can still count toward the
+  new state once. The effect is at most one result.
+
 ### 5.4 Alerting — Redis Stream for delivery
 
 After the transaction commits, the worker publishes an event to the Redis stream

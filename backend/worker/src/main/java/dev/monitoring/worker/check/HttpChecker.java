@@ -15,6 +15,7 @@ import java.net.ConnectException;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -87,7 +88,8 @@ public class HttpChecker implements Closeable {
     }
 
     public CheckOutcome check(ClaimedMonitor monitor) {
-        Instant checkedAt = Instant.now();
+        // PostgreSQL stores microseconds; truncating keeps in-memory and stored times comparable.
+        Instant checkedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         URI uri;
         try {
             uri = urlSyntax.validate(monitor.url());

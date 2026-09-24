@@ -1,5 +1,6 @@
 package dev.monitoring.worker.check;
 
+import dev.monitoring.worker.incident.IncidentStateMachine.Event;
 import dev.monitoring.worker.scheduling.ClaimedMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,13 @@ public class HttpCheckRunner implements CheckRunner {
                     outcome.errorMessage());
         }
         try {
-            recorder.record(monitor, outcome);
+            Event event = recorder.record(monitor, outcome);
+            if (event == Event.INCIDENT_OPENED) {
+                log.warn("Incident opened: monitor is DOWN ({}: {})",
+                        outcome.errorType(), outcome.errorMessage());
+            } else if (event == Event.INCIDENT_RESOLVED) {
+                log.info("Incident resolved: monitor is UP again");
+            }
         } catch (DataIntegrityViolationException e) {
             log.info("Monitor was deleted during the check; result discarded");
         } catch (DataAccessException e) {
