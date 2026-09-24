@@ -30,8 +30,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 8 | React dashboard | ✅ |
 | 9 | Monitoring history & charts | ✅ |
 | 10 | Prometheus metrics | ✅ |
-| 11 | Grafana dashboards | ⏳ |
-| 12 | Alerting | |
+| 11 | Grafana dashboards | ✅ |
+| 12 | Alerting | ⏳ |
 | 13 | Authentication | |
 | 14 | Docker Compose | |
 | 15 | Nginx | |
@@ -136,6 +136,17 @@ scheduler lag, API 5xx rate, targets down and high check-failure rate. Validate 
 docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro"   prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
 docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro"   prom/prometheus:v3.14.0 test rules /etc/prometheus/tests/platform_test.yml
 ```
+
+### Dashboards (Grafana)
+
+`docker compose up -d grafana` starts Grafana on http://localhost:3000. Log in with
+`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `.env`; sign-up and anonymous access
+are disabled. The Prometheus datasource and the **Monitoring Platform** dashboard are
+provisioned from `infra/grafana/` (read-only in the UI, so edit the JSON in the repository):
+
+- **Fleet:** monitors up/down, open incidents, check success rate, per-monitor status timeline
+- **Checks:** checks/s by outcome, failures by error type, p50/p95 check duration, scheduler lag, checks in flight, incidents
+- **Services:** API/worker instances up, API 5xx rate, requests by status, p95 latency by endpoint, JVM heap, DB connections
 
 ## REST API
 
