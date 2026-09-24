@@ -1,5 +1,7 @@
 package dev.monitoring.api.web;
 
+import dev.monitoring.api.monitor.MonitorNotFoundException;
+import dev.monitoring.common.net.InvalidTargetUrlException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Comparator;
 import java.util.List;
@@ -12,10 +14,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -61,6 +65,64 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Invalid request");
         problem.setProperty("errors", errors);
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
+    }
+
+    /** Validation failures on {@code @RequestParam}/{@code @PathVariable} constraints. */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        List<FieldViolation> errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> new FieldViolation(
+                                result.getMethodParameter().getParameterName(),
+                                error.getDefaultMessage())))
+                .sorted(Comparator.comparing(FieldViolation::field))
+                .toList();
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Request validation failed");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", errors);
+        return createResponseEntity(problem, headers, HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(InvalidTargetUrlException.class)
+    public ResponseEntity<Object> handleInvalidTargetUrl(InvalidTargetUrlException ex,
+                                                         WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Request validation failed");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", List.of(new FieldViolation("url", ex.getMessage())));
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(MonitorNotFoundException.class)
+    public ResponseEntity<Object> handleMonitorNotFound(MonitorNotFoundException ex,
+                                                        WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, "Monitor not found");
+        problem.setTitle("Not Found");
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.NOT_FOUND, request);
+    }
+
+    @ExceptionHandler(PreconditionFailedException.class)
+    public ResponseEntity<Object> handlePreconditionFailed(PreconditionFailedException ex,
+                                                           WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.PRECONDITION_FAILED, ex.getMessage());
+        problem.setTitle("Precondition Failed");
+        return createResponseEntity(problem, new HttpHeaders(),
+                HttpStatus.PRECONDITION_FAILED, request);
+    }
+
+    /** Two writers changed the same row concurrently; the later one loses. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Object> handleOptimisticLock(ObjectOptimisticLockingFailureException ex,
+                                                       WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "The resource was modified concurrently; reload it and try again");
+        problem.setTitle("Conflict");
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.CONFLICT, request);
     }
 
     @ExceptionHandler(Exception.class)

@@ -214,6 +214,10 @@ as later migrations; existing migrations are never edited.
 - Errors use RFC 9457 Problem Details (`application/problem+json`) with field-level
   validation errors.
 - Pagination: `?page=&size=` with a maximum page size and stable sorting.
+- Optimistic concurrency: single-resource responses carry `ETag: "<version>"`; a `PUT` with a
+  stale `If-Match` returns **412**, and a write that loses a race at commit time returns **409**.
+- Unknown JSON fields are rejected (400) rather than silently ignored, so read-only fields such as
+  `status` or `id` can never be set by clients.
 - Timestamps in UTC as ISO-8601; IDs as UUIDs (not guessable sequential IDs).
 - Management endpoints (`/actuator/health`, `/actuator/prometheus`) are served on a
   **separate management port** that is never routed through Nginx.
@@ -222,7 +226,7 @@ as later migrations; existing migrations are never edited.
 
 | Risk | Mitigation |
 |------|------------|
-| **SSRF** — users submit URLs that the worker fetches | Allow only `http`/`https`; resolve DNS and block loopback, private (RFC 1918), link-local (incl. `169.254.169.254` cloud metadata), CGNAT and IPv6 equivalents; re-check the resolved address at connection time (DNS rebinding) and on every redirect; cap redirects, response body size, timeout. An allow-list mode for internal targets is available as an explicit admin setting. |
+| **SSRF** — users submit URLs that the worker fetches | Allow only `http`/`https`; resolve DNS and block loopback, private (RFC 1918), link-local (incl. `169.254.169.254` cloud metadata), CGNAT and IPv6 equivalents; re-check the resolved address at connection time (DNS rebinding) and on every redirect; cap redirects, response body size, timeout. An allow-list mode for internal targets is available as an explicit admin setting. Implemented in `common/net` (`TargetUrlValidator`, `BlockedAddresses`): the API validates on save; the worker must re-check every resolved address before connecting. Setting `MONITORING_ALLOW_PRIVATE_TARGETS=true` disables the private-address check and logs a warning. |
 | Command injection | No shell execution anywhere. Future Linux-host monitoring uses an agent/exporter model (node_exporter), not SSH commands built from user input. |
 | Secrets in code | All secrets from environment variables / secret manager; `.env` is git-ignored; `.env.example` holds placeholders only; CI secret scanning. |
 | Injection / invalid input | Bean Validation on every DTO; JPA parameter binding only; strict enums; length limits. |

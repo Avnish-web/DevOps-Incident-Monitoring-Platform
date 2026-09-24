@@ -28,6 +28,15 @@ spring:
     # The API is the only service that migrates the schema (see docs/architecture.md §4).
     enabled: true
     locations: classpath:db/migration
+  jackson:
+    deserialization:
+      # Reject unexpected fields (e.g. "id", "status") instead of silently ignoring them.
+      fail-on-unknown-properties: true
+
+monitoring:
+  targets:
+    # SSRF protection: keep false unless you intentionally monitor internal services.
+    allow-private-addresses: ${MONITORING_ALLOW_PRIVATE_TARGETS:false}
 
 server:
   port: ${API_PORT:8080}

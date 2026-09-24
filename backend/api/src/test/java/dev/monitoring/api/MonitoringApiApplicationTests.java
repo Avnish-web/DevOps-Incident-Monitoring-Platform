@@ -6,20 +6,14 @@ import dev.monitoring.api.web.RequestIdFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.client.RestTestClient;
 
 /** Boots the full application on random ports and exercises it over real HTTP. */
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        // The container supplies the real credentials; the password check only needs a value.
-        properties = {"management.server.port=0", "POSTGRES_PASSWORD=provided-by-testcontainers"})
-@Import(PostgresTestcontainer.class)
+@ApiIntegrationTest
 class MonitoringApiApplicationTests {
 
     @Autowired

@@ -17,7 +17,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest
+// Only the probe controller: the handler is tested in isolation from real controllers.
+@WebMvcTest(controllers = ErrorProbeController.class)
 @Import(ErrorProbeController.class)
 class GlobalExceptionHandlerTests {
 

@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 3 — API service with PostgreSQL schema (Flyway), health checks, structured logging.
+> **Status:** Phase 4 — monitor CRUD REST API with SSRF-safe URL validation, on PostgreSQL.
 
 ## Architecture at a glance
 
@@ -23,8 +23,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 1 | Project architecture | ✅ |
 | 2 | Spring Boot backend | ✅ |
 | 3 | PostgreSQL database | ✅ |
-| 4 | Monitoring target CRUD | ⏳ |
-| 5 | Monitoring worker | |
+| 4 | Monitoring target CRUD | ✅ |
+| 5 | Monitoring worker | ⏳ |
 | 6 | Health checks & response-time measurement | |
 | 7 | Incident detection | |
 | 8 | React dashboard | |
@@ -71,6 +71,31 @@ schema on startup. If a native PostgreSQL already uses port 5432, set `DB_PORT=5
 Logs are JSON (Elastic Common Schema) by default; the `local` profile switches to
 readable text. Every response carries an `X-Request-Id` header, and errors use
 RFC 9457 Problem Details (`application/problem+json`).
+
+## REST API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/monitors` | Create a monitor → `201` + `Location` + `ETag` |
+| `GET` | `/api/v1/monitors?page=0&size=20&sort=name,asc` | List (size ≤ 100; sort by `name`, `status`, `createdAt`, `updatedAt`) |
+| `GET` | `/api/v1/monitors/{id}` | Get one → `ETag: "<version>"` |
+| `PUT` | `/api/v1/monitors/{id}` | Replace configuration; optional `If-Match` → `412` if stale |
+| `DELETE` | `/api/v1/monitors/{id}` | Delete monitor and its history → `204` |
+
+```bash
+curl -X POST localhost:8080/api/v1/monitors -H "Content-Type: application/json" \
+  -d '{"name":"Example","url":"https://example.com","intervalSeconds":60}'
+```
+
+Fields: `name` (required, ≤ 100), `url` (required, http/https), `httpMethod` (`GET`|`HEAD`),
+`intervalSeconds` (30–86400, default 60), `timeoutMs` (1000–30000, default 5000),
+`expectedStatus` (100–599, default any 2xx/3xx), `failureThreshold` / `recoveryThreshold`
+(1–10, defaults 3 / 2), `enabled` (default true).
+
+URLs pointing at loopback, private, link-local (e.g. cloud metadata `169.254.169.254`) or other
+reserved addresses are rejected, including host names that resolve to them.
+
+> The API has no authentication until Phase 13 — do not expose it beyond localhost.
 
 ## Configuration
 
