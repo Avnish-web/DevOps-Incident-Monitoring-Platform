@@ -57,6 +57,13 @@ monitoring:
     batch-size: ${WORKER_BATCH_SIZE:50}
     concurrency: ${WORKER_CONCURRENCY:20}
     shutdown-grace: ${WORKER_SHUTDOWN_GRACE:20s}
+    http:
+      max-redirects: ${WORKER_HTTP_MAX_REDIRECTS:5}
+      max-body-bytes: ${WORKER_HTTP_MAX_BODY:1MB}
+      user-agent: ${WORKER_HTTP_USER_AGENT:monitoring-platform-worker/0.1}
+  targets:
+    # SSRF protection: keep false unless you intentionally monitor internal services.
+    allow-private-addresses: ${MONITORING_ALLOW_PRIVATE_TARGETS:false}
 
 logging:
   structured:

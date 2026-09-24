@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 5 — monitor CRUD API plus a horizontally scalable worker that schedules checks.
+> **Status:** Phase 6 — monitor CRUD API plus a horizontally scalable worker running SSRF-safe HTTP checks with response-time history.
 
 ## Architecture at a glance
 
@@ -25,8 +25,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 3 | PostgreSQL database | ✅ |
 | 4 | Monitoring target CRUD | ✅ |
 | 5 | Monitoring worker | ✅ |
-| 6 | Health checks & response-time measurement | ⏳ |
-| 7 | Incident detection | |
+| 6 | Health checks & response-time measurement | ✅ |
+| 7 | Incident detection | ⏳ |
 | 8 | React dashboard | |
 | 9 | Monitoring history & charts | |
 | 10 | Prometheus metrics | |
@@ -75,8 +75,15 @@ curl localhost:8082/actuator/health/readiness
 ```
 
 The worker claims due monitors from PostgreSQL (`FOR UPDATE SKIP LOCKED`), so any number
-of instances can run side by side; give each its own `WORKER_MANAGEMENT_PORT`. In this
-phase a check is only dispatched and logged. The real HTTP check arrives in Phase 6.
+of instances can run side by side; give each its own `WORKER_MANAGEMENT_PORT`. Each check
+is a real HTTP(S) request. Its status, latency and classified error (`TIMEOUT`,
+`DNS_FAILURE`, `CONNECTION_REFUSED`, `TLS_ERROR`, `UNEXPECTED_STATUS`, `BLOCKED_TARGET`, …)
+are stored in `check_results`:
+
+```bash
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT checked_at, success, status_code, latency_ms, error_type FROM check_results ORDER BY checked_at DESC LIMIT 10"'
+```
 
 | Port | Purpose |
 |------|---------|

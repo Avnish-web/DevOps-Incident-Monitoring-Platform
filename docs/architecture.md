@@ -150,6 +150,23 @@ The HTTP check records: final status code, total latency (ms), TLS handshake suc
 optional expected status / keyword match, and a classified error (`TIMEOUT`,
 `DNS_FAILURE`, `CONNECTION_REFUSED`, `TLS_ERROR`, `UNEXPECTED_STATUS`, `BODY_MISMATCH`).
 
+**As implemented (Phase 6)** in `worker/check`:
+
+- `HttpChecker` uses Apache HttpClient 5 with a `GuardedDnsResolver`. The client connects **only**
+  to addresses that resolver returns, and the resolver rejects the host if any address is blocked.
+  The SSRF policy therefore applies to every connection, including each redirect hop, IP-literal
+  hosts, and a DNS answer that changed after the monitor was saved (rebinding).
+- **Latency** runs from just before sending the request to the end of reading the body. It covers a
+  fresh DNS + TCP + TLS + request each time, because connections are never reused.
+- **Limits:** a hard deadline equal to `timeoutMs` cancels the request in any phase (connect,
+  headers or slow-drip body). Redirects are capped at 5, circular redirects rejected, at most 1 MB of
+  body read. No retries, cookies, auth or system proxies.
+- **Success:** the status equals `expectedStatus`, or any 2xx/3xx if none is set. `BODY_MISMATCH` is
+  reserved for a future keyword check.
+- `CheckResultRecorder` writes the `check_results` row and advances `monitors.last_checked_at` (only
+  ever forward) in one transaction, without bumping the JPA version. If the monitor was deleted
+  mid-check, the result is discarded. If the database is down, the result is dropped and logged.
+
 ### 5.3 Incident detection — a per-monitor state machine
 
 ```text
