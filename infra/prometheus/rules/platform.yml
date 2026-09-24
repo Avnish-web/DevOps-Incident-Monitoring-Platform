@@ -1,0 +1,74 @@
+# Alerts about the platform itself (is the monitoring system healthy?) and about the
+# targets it watches. Target alerts complement the application's own incident alerting.
+groups:
+  - name: platform-health
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API instance {{ $labels.instance }} is not scrapeable"
+          description: "Prometheus has failed to scrape the API for 1 minute."
+
+      - alert: WorkerDown
+        expr: up{job="worker"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker instance {{ $labels.instance }} is not scrapeable"
+          description: "No checks are running on this instance. With no healthy worker, targets are not monitored."
+
+      - alert: NoChecksRunning
+        expr: sum(rate(monitoring_checks_total[5m])) == 0 and max(monitoring_monitors{state!="paused"}) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monitors exist but no checks completed in 5 minutes"
+          description: "Workers may be stuck, unready (database down) or scaled to zero."
+
+      - alert: SchedulerLagHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(monitoring_scheduler_lag_seconds_bucket[5m]))) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Checks start {{ $value | humanizeDuration }} late (p95)"
+          description: "Workers are saturated. Increase WORKER_CONCURRENCY or add worker replicas."
+
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="api",status=~"5.."}[5m]))
+            / sum(rate(http_server_requests_seconds_count{job="api"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5% of API requests fail with 5xx"
+          description: "Look up failing requests in the API logs by requestId."
+
+  - name: monitored-targets
+    rules:
+      - alert: MonitoredTargetDown
+        # One series per monitor; every API replica reports the same value, hence max.
+        expr: max by (monitor_id, monitor_name) (monitoring_monitor_up) == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.monitor_name }} is down"
+          description: "Monitor {{ $labels.monitor_id }} has an open incident."
+
+      - alert: HighCheckFailureRate
+        expr: |
+          sum(rate(monitoring_checks_total{outcome="failure"}[10m]))
+            / sum(rate(monitoring_checks_total[10m])) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of checks are failing"
+          description: "Could be many targets failing, or a network/DNS problem on the worker side."

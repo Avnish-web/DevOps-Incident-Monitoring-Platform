@@ -29,8 +29,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 7 | Incident detection | ✅ |
 | 8 | React dashboard | ✅ |
 | 9 | Monitoring history & charts | ✅ |
-| 10 | Prometheus metrics | ⏳ |
-| 11 | Grafana dashboards | |
+| 10 | Prometheus metrics | ✅ |
+| 11 | Grafana dashboards | ⏳ |
 | 12 | Alerting | |
 | 13 | Authentication | |
 | 14 | Docker Compose | |
@@ -109,6 +109,33 @@ edit, pause/resume and delete. It also shows monitor details and incident histor
 validation mirrors the API's rules, and server-side field errors (such as a blocked private
 address) appear next to the field. Edits send `If-Match`, so a concurrent change is reported
 instead of overwritten.
+
+### Metrics (Prometheus)
+
+Both services expose `/actuator/prometheus` on their **internal** management port (API 8081,
+worker 8082). Nginx never proxies this port. `docker compose up -d prometheus` starts
+Prometheus on http://localhost:9090 with the scrape config and alert rules in
+`infra/prometheus/`.
+
+| Metric | Source | Meaning |
+|--------|--------|---------|
+| `monitoring_checks_total{outcome,error_type}` | worker | Completed checks |
+| `monitoring_check_duration_seconds` | worker | Check duration histogram (SLO buckets) |
+| `monitoring_scheduler_lag_seconds` | worker | How late checks start vs. their due time |
+| `monitoring_checks_in_flight` | worker | Checks running now |
+| `monitoring_incidents_total{event}` | worker | Incidents opened / resolved |
+| `monitoring_monitors{state}` | API | Monitors by state (up, down, unknown, paused) |
+| `monitoring_monitor_up{monitor_id,monitor_name}` | API | 1 = up, 0 = down per monitor |
+| `monitoring_open_incidents` | API | Open incidents |
+| `http_server_requests_seconds` | both | HTTP latency / status (Spring Boot) |
+
+Alert rules (`infra/prometheus/rules/platform.yml`) cover API/worker down, no checks running,
+scheduler lag, API 5xx rate, targets down and high check-failure rate. Validate and test them:
+
+```bash
+docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro"   prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
+docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro"   prom/prometheus:v3.14.0 test rules /etc/prometheus/tests/platform_test.yml
+```
 
 ## REST API
 

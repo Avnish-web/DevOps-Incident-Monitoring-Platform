@@ -1,0 +1,45 @@
+# Unit tests for alert rules: promtool test rules /etc/prometheus/tests/platform_test.yml
+rule_files:
+  - ../rules/platform.yml
+
+evaluation_interval: 15s
+
+tests:
+  - name: target down fires after 1 minute, deduplicated across API replicas
+    interval: 15s
+    input_series:
+      - series: 'monitoring_monitor_up{instance="api-1",monitor_id="m1",monitor_name="shop"}'
+        values: "1 1 0 0 0 0 0 0"
+      - series: 'monitoring_monitor_up{instance="api-2",monitor_id="m1",monitor_name="shop"}'
+        values: "1 1 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: MonitoredTargetDown
+        exp_alerts: []
+      - eval_time: 105s
+        alertname: MonitoredTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              monitor_id: m1
+              monitor_name: shop
+            exp_annotations:
+              summary: "shop is down"
+              description: "Monitor m1 has an open incident."
+
+  - name: worker down fires when scrapes fail
+    interval: 15s
+    input_series:
+      - series: 'up{job="worker",instance="worker:8082"}'
+        values: "1 0 0 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 90s
+        alertname: WorkerDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: worker
+              instance: "worker:8082"
+            exp_annotations:
+              summary: "Worker instance worker:8082 is not scrapeable"
+              description: "No checks are running on this instance. With no healthy worker, targets are not monitored."

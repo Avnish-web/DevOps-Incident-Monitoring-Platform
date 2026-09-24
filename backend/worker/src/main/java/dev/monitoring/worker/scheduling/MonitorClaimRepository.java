@@ -1,6 +1,7 @@
 package dev.monitoring.worker.scheduling;
 
 import dev.monitoring.common.domain.HttpCheckMethod;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -26,7 +27,7 @@ public class MonitorClaimRepository {
     private static final String CLAIM_SQL = """
             UPDATE monitors m
                SET next_check_at = now() + make_interval(secs => m.interval_seconds)
-              FROM (SELECT id
+              FROM (SELECT id, next_check_at AS due_at
                       FROM monitors
                      WHERE enabled
                        AND next_check_at <= now()
@@ -35,7 +36,7 @@ public class MonitorClaimRepository {
                        FOR UPDATE SKIP LOCKED) due
              WHERE m.id = due.id
             RETURNING m.id, m.url, m.http_method, m.timeout_ms, m.expected_status,
-                      m.interval_seconds
+                      m.interval_seconds, due.due_at
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -56,6 +57,7 @@ public class MonitorClaimRepository {
                         HttpCheckMethod.valueOf(rs.getString("http_method")),
                         rs.getInt("timeout_ms"),
                         rs.getObject("expected_status", Integer.class),
-                        rs.getInt("interval_seconds")));
+                        rs.getInt("interval_seconds"),
+                        rs.getObject("due_at", OffsetDateTime.class).toInstant()));
     }
 }

@@ -2,6 +2,9 @@ package dev.monitoring.worker.scheduling;
 
 import dev.monitoring.worker.check.CheckRunner;
 import dev.monitoring.worker.config.WorkerProperties;
+import dev.monitoring.worker.metrics.WorkerMetrics;
+import io.micrometer.core.instrument.Gauge;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -35,6 +38,7 @@ public class CheckScheduler implements SmartLifecycle {
     private final MonitorClaimRepository claims;
     private final CheckRunner runner;
     private final WorkerProperties properties;
+    private final WorkerMetrics metrics;
     private final Semaphore slots;
 
     private volatile boolean running;
@@ -44,11 +48,15 @@ public class CheckScheduler implements SmartLifecycle {
     private ExecutorService checkPool;
 
     public CheckScheduler(MonitorClaimRepository claims, CheckRunner runner,
-                          WorkerProperties properties) {
+                          WorkerProperties properties, WorkerMetrics metrics) {
         this.claims = claims;
         this.runner = runner;
         this.properties = properties;
+        this.metrics = metrics;
         this.slots = new Semaphore(properties.concurrency());
+        Gauge.builder("monitoring.checks.in_flight", this, CheckScheduler::inFlight)
+                .description("Checks currently running in this worker")
+                .register(metrics.registry());
     }
 
     @Override
@@ -130,7 +138,11 @@ public class CheckScheduler implements SmartLifecycle {
             throw e;
         }
         slots.release(permits - claimed.size());
+        Instant now = Instant.now();
         for (ClaimedMonitor monitor : claimed) {
+            if (monitor.dueAt() != null) {
+                metrics.recordClaim(Duration.between(monitor.dueAt(), now));
+            }
             submit(monitor);
         }
     }

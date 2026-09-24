@@ -8,6 +8,8 @@ import dev.monitoring.worker.TestMonitors;
 import dev.monitoring.worker.WorkerIntegrationTest;
 import dev.monitoring.worker.check.CheckRunner;
 import dev.monitoring.worker.config.WorkerProperties;
+import dev.monitoring.worker.metrics.WorkerMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -53,7 +55,7 @@ class CheckSchedulerTests {
     private CheckScheduler newScheduler(CheckRunner runner, int concurrency, Duration grace) {
         WorkerProperties props = new WorkerProperties(true, Duration.ofMillis(50), 50,
                 concurrency, grace);
-        return new CheckScheduler(claims, runner, props);
+        return new CheckScheduler(claims, runner, props, new WorkerMetrics(new SimpleMeterRegistry()));
     }
 
     private int dueCount() {

@@ -1,6 +1,7 @@
 package dev.monitoring.worker.check;
 
 import dev.monitoring.worker.incident.IncidentStateMachine.Event;
+import dev.monitoring.worker.metrics.WorkerMetrics;
 import dev.monitoring.worker.scheduling.ClaimedMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,15 +17,19 @@ public class HttpCheckRunner implements CheckRunner {
 
     private final HttpChecker checker;
     private final CheckResultRecorder recorder;
+    private final WorkerMetrics metrics;
 
-    public HttpCheckRunner(HttpChecker checker, CheckResultRecorder recorder) {
+    public HttpCheckRunner(HttpChecker checker, CheckResultRecorder recorder,
+                           WorkerMetrics metrics) {
         this.checker = checker;
         this.recorder = recorder;
+        this.metrics = metrics;
     }
 
     @Override
     public void run(ClaimedMonitor monitor) {
         CheckOutcome outcome = checker.check(monitor);
+        metrics.recordCheck(outcome);
         if (outcome.success()) {
             log.debug("Check succeeded: status={} latencyMs={}",
                     outcome.statusCode(), outcome.latencyMs());
@@ -35,6 +40,7 @@ public class HttpCheckRunner implements CheckRunner {
         }
         try {
             Event event = recorder.record(monitor, outcome);
+            metrics.recordIncident(event);
             if (event == Event.INCIDENT_OPENED) {
                 log.warn("Incident opened: monitor is DOWN ({}: {})",
                         outcome.errorType(), outcome.errorMessage());
