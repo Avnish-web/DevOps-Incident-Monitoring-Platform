@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 7 — SSRF-safe HTTP checks with response-time history and automatic incident detection.
+> **Status:** Phase 8 — React dashboard on top of SSRF-safe HTTP checks and automatic incident detection.
 
 ## Architecture at a glance
 
@@ -27,8 +27,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 5 | Monitoring worker | ✅ |
 | 6 | Health checks & response-time measurement | ✅ |
 | 7 | Incident detection | ✅ |
-| 8 | React dashboard | ⏳ |
-| 9 | Monitoring history & charts | |
+| 8 | React dashboard | ✅ |
+| 9 | Monitoring history & charts | ⏳ |
 | 10 | Prometheus metrics | |
 | 11 | Grafana dashboards | |
 | 12 | Alerting | |
@@ -93,6 +93,22 @@ docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 Logs are JSON (Elastic Common Schema) by default; the `local` profile switches to
 readable text. Every response carries an `X-Request-Id` header, and errors use
 RFC 9457 Problem Details (`application/problem+json`).
+
+### Running the dashboard
+
+```bash
+cd frontend
+npm ci
+npm run dev          # http://localhost:5173, proxies /api to the API on :8080
+npm test             # unit/component tests (Vitest)
+npm run lint && npm run build
+```
+
+The dashboard lists monitors with live status (refreshing every 15 s) and supports create,
+edit, pause/resume and delete. It also shows monitor details and incident history. Form
+validation mirrors the API's rules, and server-side field errors (such as a blocked private
+address) appear next to the field. Edits send `If-Match`, so a concurrent change is reported
+instead of overwritten.
 
 ## REST API
 

@@ -1,0 +1,111 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1c2330;
+  --muted: #5f6b7a;
+  --border: #dde2e8;
+  --primary: #2458d6;
+  --primary-text: #ffffff;
+  --up: #1f8a4c;
+  --up-bg: #e3f5ea;
+  --down: #c62828;
+  --down-bg: #fde7e7;
+  --pending: #8a6d00;
+  --pending-bg: #fff4cc;
+  --paused: #5f6b7a;
+  --paused-bg: #eceff3;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151c;
+    --surface: #1a2029;
+    --text: #e6e9ee;
+    --muted: #9aa5b3;
+    --border: #2c3542;
+    --primary: #5b8cff;
+    --up: #5fd48f;
+    --up-bg: #173524;
+    --down: #ff7b7b;
+    --down-bg: #3d1c1c;
+    --pending: #f2cc5b;
+    --pending-bg: #3a3218;
+    --paused: #aab4c0;
+    --paused-bg: #2a313b;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; }
+.app-header nav { display: flex; gap: 1rem; }
+.app-header nav a { color: var(--muted); text-decoration: none; padding: 0.25rem 0; }
+.app-header nav a.active { color: var(--text); border-bottom: 2px solid var(--primary); }
+
+.app-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+a { color: var(--primary); }
+
+.page-header { display: flex; justify-content: space-between; align-items: center; }
+.summary { color: var(--muted); }
+.summary-down { color: var(--down); }
+.empty { color: var(--muted); }
+
+.table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); }
+.table th, .table td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table th { font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
+.url { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.cause { max-width: 360px; font-size: 0.85rem; overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; }
+
+.badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.badge-up { color: var(--up); background: var(--up-bg); }
+.badge-down { color: var(--down); background: var(--down-bg); }
+.badge-unknown { color: var(--pending); background: var(--pending-bg); }
+.badge-paused, .badge-resolved { color: var(--paused); background: var(--paused-bg); }
+
+button, .button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+}
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.primary { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.danger { color: var(--down); }
+
+.error-banner { background: var(--down-bg); color: var(--down); padding: 0.75rem 1rem; border-radius: 6px; margin: 1rem 0; }
+
+.monitor-form { max-width: 720px; background: var(--surface); border: 1px solid var(--border); padding: 1.5rem; border-radius: 8px; }
+.field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; flex: 1; }
+.field input, .field select { font: inherit; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.field input[aria-invalid='true'] { border-color: var(--down); }
+.field-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.field.checkbox { flex-direction: row; align-items: center; gap: 0.5rem; }
+.hint { color: var(--muted); }
+.field-error { color: var(--down); }
+.actions { display: flex; gap: 0.75rem; }
+
+.details { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1.5rem; background: var(--surface); border: 1px solid var(--border); padding: 1rem 1.5rem; border-radius: 8px; }
+.details dt { color: var(--muted); }
+.details dd { margin: 0; }
+
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.tabs .active { border-color: var(--primary); color: var(--primary); }
+.pagination { display: flex; gap: 1rem; align-items: center; justify-content: center; margin-top: 1rem; }
