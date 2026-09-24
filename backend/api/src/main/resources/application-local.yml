@@ -1,0 +1,8 @@
+# Developer profile: human-readable console logs instead of JSON.
+# Activate with SPRING_PROFILES_ACTIVE=local (or -Dspring-boot.run.profiles=local).
+logging:
+  structured:
+    format:
+      console: ""
+  pattern:
+    level: "%5p [%X{requestId:-}]"

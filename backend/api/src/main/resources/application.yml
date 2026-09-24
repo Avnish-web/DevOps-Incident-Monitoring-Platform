@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: monitoring-api
+  lifecycle:
+    # Max time to let in-flight requests finish on shutdown (SIGTERM).
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${API_PORT:8080}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+  tomcat:
+    # Reject oversized request bodies early; monitor definitions are small JSON documents.
+    max-swallow-size: 1MB
+    max-http-form-post-size: 1MB
+
+management:
+  # Actuator runs on a separate internal port that is never routed through the reverse proxy.
+  server:
+    port: ${API_MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  info:
+    env:
+      enabled: false
+
+logging:
+  # JSON (Elastic Common Schema) to stdout by default; MDC fields such as requestId are included.
+  structured:
+    format:
+      console: ecs

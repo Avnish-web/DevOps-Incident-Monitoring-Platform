@@ -1,0 +1,7 @@
+# Normalize line endings; shell scripts and Docker files must stay LF even on Windows.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.jar binary
+*.png binary
+*.ico binary
