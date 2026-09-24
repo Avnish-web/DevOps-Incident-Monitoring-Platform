@@ -254,6 +254,13 @@ erDiagram
 retention job (for example 30 days raw). Monthly partitioning can be added later without API changes.
 Its IDs come from a sequence allocated in blocks of 50, so Hibernate can batch inserts.
 
+**History and retention (Phase 9):** statistics are computed in PostgreSQL. `date_bin` produces
+fixed buckets (1 min for 1h, 15 min for 24h, 2 h for 7d, 6 h for 30d) and `percentile_cont` gives
+p50/p95. Latency covers successful checks only. Empty buckets come back as gaps, not zeros. The
+worker's `RetentionJob` deletes results older than `RETENTION_CHECK_RESULTS_DAYS` (default 30) in
+5,000-row batches, each in its own short transaction. A `pg_try_advisory_xact_lock` ensures that
+only one replica purges at a time.
+
 The schema lives in `backend/common/src/main/resources/db/migration` (Flyway). The database enforces
 its own invariants: check constraints on intervals, timeouts and URL scheme, a consistent
 success/error pair on each result, and a partial unique index that allows **at most one open

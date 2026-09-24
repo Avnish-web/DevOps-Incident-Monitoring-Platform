@@ -61,6 +61,10 @@ monitoring:
       max-redirects: ${WORKER_HTTP_MAX_REDIRECTS:5}
       max-body-bytes: ${WORKER_HTTP_MAX_BODY:1MB}
       user-agent: ${WORKER_HTTP_USER_AGENT:monitoring-platform-worker/0.1}
+  retention:
+    enabled: ${RETENTION_ENABLED:true}
+    check-results-days: ${RETENTION_CHECK_RESULTS_DAYS:30}
+    interval: ${RETENTION_INTERVAL:1h}
   targets:
     # SSRF protection: keep false unless you intentionally monitor internal services.
     allow-private-addresses: ${MONITORING_ALLOW_PRIVATE_TARGETS:false}

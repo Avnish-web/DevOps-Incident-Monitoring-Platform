@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 8 — React dashboard on top of SSRF-safe HTTP checks and automatic incident detection.
+> **Status:** Phase 9 — dashboard with response-time charts and uptime history, SSRF-safe checks, incident detection.
 
 ## Architecture at a glance
 
@@ -28,8 +28,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 6 | Health checks & response-time measurement | ✅ |
 | 7 | Incident detection | ✅ |
 | 8 | React dashboard | ✅ |
-| 9 | Monitoring history & charts | ⏳ |
-| 10 | Prometheus metrics | |
+| 9 | Monitoring history & charts | ✅ |
+| 10 | Prometheus metrics | ⏳ |
 | 11 | Grafana dashboards | |
 | 12 | Alerting | |
 | 13 | Authentication | |
@@ -119,6 +119,8 @@ instead of overwritten.
 | `GET` | `/api/v1/monitors/{id}` | Get one → `ETag: "<version>"` |
 | `PUT` | `/api/v1/monitors/{id}` | Replace configuration; optional `If-Match` → `412` if stale |
 | `DELETE` | `/api/v1/monitors/{id}` | Delete monitor and its history → `204` |
+| `GET` | `/api/v1/monitors/{id}/checks?page&size` | Raw check results, newest first |
+| `GET` | `/api/v1/monitors/{id}/stats?range=1h\|24h\|7d\|30d` | Uptime %, avg/p50/p95/max latency and a bucketed time series |
 | `GET` | `/api/v1/incidents?status=OPEN\|RESOLVED&monitorId=…&page&size` | Incidents, newest first |
 | `GET` | `/api/v1/incidents/{id}` | One incident |
 

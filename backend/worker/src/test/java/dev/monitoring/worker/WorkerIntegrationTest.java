@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Import;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "monitoring.worker.scheduler-enabled=false",
+                "monitoring.retention.enabled=false",
                 "monitoring.targets.allow-private-addresses=true",
                 "spring.flyway.enabled=true",
                 "POSTGRES_PASSWORD=provided-by-testcontainers"})
