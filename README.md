@@ -59,7 +59,7 @@ docker compose up -d --build
 
 | URL | What |
 |-----|------|
-| http://localhost:8080 | Dashboard and API (`/api`), behind Nginx; sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` |
+| http://localhost:8080 | Dashboard and API (`/api`), behind Nginx; sign in with `admin@example.com` / `15pWcZ4VTs4z8oTplpuMcX8` |
 | http://localhost:3000 | Grafana (`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`) |
 | http://localhost:9090 | Prometheus |
 
