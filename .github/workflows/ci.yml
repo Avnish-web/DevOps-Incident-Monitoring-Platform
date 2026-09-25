@@ -1,0 +1,188 @@
+# Continuous integration: every push and pull request is built, tested and scanned.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend:
+    name: Backend (build + tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      # Testcontainers starts real PostgreSQL and Redis on the runner's Docker.
+      - name: Build and test
+        working-directory: backend
+        run: ./mvnw -B -ntp verify
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: surefire-reports
+          path: backend/**/target/surefire-reports/
+          retention-days: 7
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  infra:
+    name: Infrastructure config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prometheus config and alert rule tests
+        run: |
+          docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/etc/prometheus:ro" \
+            prom/prometheus:v3.14.0 test rules /etc/prometheus/tests/platform_test.yml
+      - name: Nginx config (HTTP and TLS)
+        run: |
+          sh scripts/dev-tls-cert.sh
+          for conf in infra/nginx/conf.d/default.conf infra/nginx/tls.conf.example; do
+            docker run --rm --add-host api:127.0.0.1 \
+              -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+              -v "$PWD/$conf:/etc/nginx/conf.d/default.conf:ro" \
+              -v "$PWD/infra/nginx/snippets:/etc/nginx/snippets:ro" \
+              -v "$PWD/infra/nginx/certs:/etc/nginx/tls:ro" \
+              nginxinc/nginx-unprivileged:1.31.6-alpine3.24 nginx -t
+          done
+      - name: Terraform format and validation
+        run: |
+          docker run --rm -v "$PWD/deploy/terraform:/tf" hashicorp/terraform:1.16.4 -chdir=/tf fmt -recursive -check
+          for stack in environments/production bootstrap; do
+            docker run --rm -v "$PWD/deploy/terraform:/tf" -w "/tf/$stack" --entrypoint sh hashicorp/terraform:1.16.4 \
+              -c "terraform init -backend=false -input=false >/dev/null && terraform validate"
+          done
+      - name: Misconfiguration scan (Terraform, Dockerfiles, Compose)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Compose files
+        run: |
+          sed 's/=$/=ci-placeholder/; s/=change-me$/=ci-placeholder/' .env.example > .env
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.tls.yml config --quiet
+
+  images:
+    name: Container images (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: backend
+            dockerfile: backend/Dockerfile
+            module: api
+          - image: worker
+            context: backend
+            dockerfile: backend/Dockerfile
+            module: worker
+          - image: web
+            context: .
+            dockerfile: frontend/Dockerfile
+            module: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          build-args: MODULE=${{ matrix.module }}
+          tags: monitoring-${{ matrix.image }}:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Vulnerability scan (fails on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: monitoring-${{ matrix.image }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The gitleaks container is free for all repositories (the GitHub Action needs a
+      # license for organization-owned repositories).
+      - name: gitleaks (full history)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 \
+            git /repo --redact --no-banner --exit-code 1
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
