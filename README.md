@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 12 — checks, incidents, history, metrics, dashboards and e-mail/Slack/webhook alerting.
+> **Status:** Phase 13 — multi-user platform with session authentication: checks, incidents, history, metrics, dashboards and alerting.
 
 ## Architecture at a glance
 
@@ -32,8 +32,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 10 | Prometheus metrics | ✅ |
 | 11 | Grafana dashboards | ✅ |
 | 12 | Alerting | ✅ |
-| 13 | Authentication | ⏳ |
-| 14 | Docker Compose | |
+| 13 | Authentication | ✅ |
+| 14 | Docker Compose | ⏳ |
 | 15 | Nginx | |
 | 16 | GitHub Actions CI/CD | |
 | 17 | AWS deployment | |
@@ -163,6 +163,31 @@ manage channels on the **Alerts** page of the dashboard or through the API.
 Channel targets are encrypted at rest with `ALERT_ENCRYPTION_KEY` (`openssl rand -base64 32`,
 same value for API and worker). Keep it safe: without it, stored channels cannot be decrypted.
 
+### Authentication
+
+- **Sessions:** server-side sessions live in **Redis** (`docker compose up -d redis`), behind an
+  HttpOnly, `SameSite=Lax` cookie (`Secure` when `SESSION_COOKIE_SECURE=true`). JavaScript never
+  sees a credential, logout takes effect immediately, and any API replica can serve any user.
+- **CSRF:** the cookie-to-header pattern. `GET /api/v1/auth/csrf` issues the `XSRF-TOKEN` cookie,
+  and every state-changing request must echo it in `X-XSRF-TOKEN`. The token is rotated at login.
+- **Accounts:** the first administrator comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD` when no users
+  exist; remove those variables afterwards. Administrators add users on the **Users** page.
+  Passwords must be 12–64 characters and are stored as BCrypt hashes.
+- **Brute force:** 5 failed logins per account or 30 per IP within 15 minutes → `429` with
+  `Retry-After`. The same `401` message is returned for an unknown user and a wrong password.
+- **Isolation:** each user sees only their own monitors, incidents, history and alert channels
+  (other users' resources return `404`), and alerts go only to the owner's channels. Deleting a
+  user ends their sessions immediately.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/auth/csrf` | Issue the CSRF cookie (`204`) |
+| `POST` | `/api/v1/auth/login` | `{email, password}` → current user, sets the session cookie |
+| `POST` | `/api/v1/auth/logout` | End the session (`204`) |
+| `GET` | `/api/v1/auth/me` | Current user |
+| `POST` | `/api/v1/auth/password` | `{currentPassword, newPassword}` |
+| `GET` / `POST` / `DELETE` | `/api/v1/users[/{id}]` | User administration (ADMIN only) |
+
 ## REST API
 
 | Method | Path | Description |
@@ -200,7 +225,8 @@ Fields: `name` (required, ≤ 100), `url` (required, http/https), `httpMethod` (
 URLs pointing at loopback, private, link-local (e.g. cloud metadata `169.254.169.254`) or other
 reserved addresses are rejected, including host names that resolve to them.
 
-> The API has no authentication until Phase 13 — do not expose it beyond localhost.
+All `/api/v1/**` endpoints require a session (see **Authentication** below). Mutating requests
+also need the `X-XSRF-TOKEN` header matching the `XSRF-TOKEN` cookie.
 
 ## Configuration
 

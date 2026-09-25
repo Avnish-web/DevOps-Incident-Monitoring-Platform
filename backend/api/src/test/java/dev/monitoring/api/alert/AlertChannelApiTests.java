@@ -3,8 +3,10 @@ package dev.monitoring.api.alert;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.monitoring.api.ApiIntegrationTest;
+import dev.monitoring.api.TestSessions;
 import dev.monitoring.common.crypto.SecretCipher;
 import dev.monitoring.common.domain.AlertChannel;
+import dev.monitoring.common.domain.User;
 import dev.monitoring.common.repository.AlertChannelRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,10 +39,16 @@ class AlertChannelApiTests {
 
     RestTestClient client;
 
+    @Autowired
+    TestSessions sessions;
+
+    User owner;
+
     @BeforeEach
     void setUp() {
         channels.deleteAll();
-        client = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        owner = sessions.user("alerts@example.com");
+        client = sessions.login(port, owner);
     }
 
     private RestTestClient.ResponseSpec post(String json) {

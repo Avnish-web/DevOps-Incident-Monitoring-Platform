@@ -60,7 +60,7 @@ flowchart LR
 | **api** | REST API: auth, monitor CRUD, history, incidents, alert channel config. Input validation. Stateless. | Horizontal replicas | PostgreSQL, Redis |
 | **worker** | Schedules and executes checks, writes results, runs incident detection, dispatches alerts. Has no public HTTP endpoints — only an internal management port for health and metrics. | Horizontal replicas (see §5) | PostgreSQL, Redis, external targets, notification providers |
 | **postgresql** | System of record: users, monitors, check results, incidents, alert config. | Vertical, later managed (RDS) | — |
-| **redis** | Alert event stream, short-lived caches, rate-limit counters. **Not** a source of truth. | Single node, later managed (ElastiCache) | — |
+| **redis** | HTTP sessions (Spring Session) and login rate-limit counters. **Not** a source of truth: losing it only signs users out. | Single node, later managed (ElastiCache) | — |
 | **prometheus** | Scrapes API and worker metrics. | — | api, worker |
 | **grafana** | Dashboards on Prometheus data (provisioned as code). | — | Prometheus |
 | **nginx** | TLS termination, serves the SPA, proxies `/api`, security headers, request size limits. | — | frontend, api |
@@ -305,7 +305,7 @@ as later migrations; existing migrations are never edited.
 | Command injection | No shell execution anywhere. Future Linux-host monitoring uses an agent/exporter model (node_exporter), not SSH commands built from user input. |
 | Secrets in code | All secrets from environment variables / secret manager; `.env` is git-ignored; `.env.example` holds placeholders only; CI secret scanning. |
 | Injection / invalid input | Bean Validation on every DTO; JPA parameter binding only; strict enums; length limits. |
-| Auth (Phase 13) | Passwords hashed with BCrypt/Argon2; short-lived JWT access tokens + refresh; rate-limited login; every query scoped by owner. |
+| Auth (Phase 13) | *Design change: server-side sessions instead of JWTs.* For a same-origin SPA, an HttpOnly session cookie cannot be read by injected scripts, and revocation is immediate (logout, user deletion ends all sessions via the Spring Session principal index). Sessions are stored in Redis, so API replicas stay stateless. CSRF uses the cookie-to-header pattern with token rotation at login. Passwords are BCrypt (delegating encoder, upgradeable) with a 12–64 character policy. Login is rate limited per account and per IP with Redis counters, and errors are uniform (no user enumeration). Every query is scoped by owner, and others' resources return 404. |
 | Transport | TLS at Nginx; HSTS, CSP, X-Content-Type-Options, frame-ancestors headers. |
 | Containers | Non-root users, minimal base images, pinned versions, read-only FS where possible, image scanning in CI. |
 | Abuse | Minimum check interval (30 s), cap on monitors per user, API rate limiting via Redis. |

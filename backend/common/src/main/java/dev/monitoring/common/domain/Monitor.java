@@ -35,6 +35,9 @@ public class Monitor {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(name = "owner_id", updatable = false)
+    private UUID ownerId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private MonitorType type;
@@ -235,5 +238,17 @@ public class Monitor {
 
     public long getVersion() {
         return version;
+    }
+
+    /** The user who owns this resource; set once at creation. */
+    public UUID getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(UUID ownerId) {
+        if (this.ownerId != null && !this.ownerId.equals(ownerId)) {
+            throw new IllegalStateException("Owner cannot be changed");
+        }
+        this.ownerId = ownerId;
     }
 }

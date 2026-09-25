@@ -4,6 +4,8 @@ import dev.monitoring.common.domain.Monitor;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -18,4 +20,10 @@ public interface MonitorRepository extends JpaRepository<Monitor, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT m FROM Monitor m WHERE m.id = :id")
     Optional<Monitor> findByIdForUpdate(@Param("id") UUID id);
+
+    Optional<Monitor> findByIdAndOwnerId(UUID id, UUID ownerId);
+
+    Page<Monitor> findAllByOwnerId(UUID ownerId, Pageable pageable);
+
+    boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 }

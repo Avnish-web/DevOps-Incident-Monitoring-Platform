@@ -1,8 +1,9 @@
 package dev.monitoring.api.web;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
-import static org.hamcrest.Matchers.containsString;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -15,11 +16,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 // Only the probe controller: the handler is tested in isolation from real controllers.
 @WebMvcTest(controllers = ErrorProbeController.class)
 @Import(ErrorProbeController.class)
+@WithMockUser
 class GlobalExceptionHandlerTests {
 
     @Autowired
@@ -27,7 +30,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void invalidBodyReturnsFieldErrors() throws Exception {
-        mvc.perform(post("/test/validate")
+        mvc.perform(post("/test/validate").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"\",\"intervalSeconds\":5}"))
                 .andExpect(status().isBadRequest())
@@ -41,7 +44,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void malformedJsonReturns400() throws Exception {
-        mvc.perform(post("/test/validate")
+        mvc.perform(post("/test/validate").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{not json"))
                 .andExpect(status().isBadRequest())

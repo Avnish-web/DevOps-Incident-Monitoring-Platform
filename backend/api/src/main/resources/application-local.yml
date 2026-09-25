@@ -1,6 +1,9 @@
 # Developer profile: human-readable console logs instead of JSON.
 # Activate with SPRING_PROFILES_ACTIVE=local (or -Dspring-boot.run.profiles=local).
 spring:
+  data:
+    redis:
+      password: ${REDIS_PASSWORD}
   config:
     # Read database credentials from the repository-root .env file when running outside Docker.
     # Paths cover running from the repo root, backend/, or backend/api (spring-boot:run).

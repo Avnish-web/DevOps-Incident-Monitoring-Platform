@@ -3,6 +3,7 @@ package dev.monitoring.api.metrics;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.monitoring.api.ApiIntegrationTest;
+import dev.monitoring.api.TestSessions;
 import dev.monitoring.common.domain.Incident;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorType;
@@ -37,6 +38,9 @@ class ApiMetricsTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    TestSessions sessions;
 
     @BeforeEach
     void clean() {
@@ -75,7 +79,7 @@ class ApiMetricsTests {
 
     @Test
     void exposesHttpServerMetricsWithSloBuckets() {
-        RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build()
+        sessions.login(port, sessions.user("metrics@example.com"))
                 .get().uri("/api/v1/monitors").exchange().expectStatus().isOk();
 
         assertThat(scrape())
@@ -86,7 +90,10 @@ class ApiMetricsTests {
 
     @Test
     void prometheusIsNotOnThePublicPort() {
+        // Anonymous callers are rejected before any endpoint is reached.
         RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build()
-                .get().uri("/actuator/prometheus").exchange().expectStatus().isNotFound();
+                .get().uri("/actuator/prometheus").exchange().expectStatus().isUnauthorized();
+        sessions.login(port, sessions.user("metrics@example.com"))
+                .get().uri("/actuator/prometheus").exchange().expectStatus().isForbidden();
     }
 }

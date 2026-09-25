@@ -1,5 +1,6 @@
 package dev.monitoring.api.monitor;
 
+import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.api.web.PreconditionFailedException;
 import dev.monitoring.common.domain.IncidentResolution;
@@ -27,12 +28,14 @@ public class MonitorService {
     private final MonitorRepository monitors;
     private final IncidentRepository incidents;
     private final TargetUrlValidator urlValidator;
+    private final CurrentUser currentUser;
 
     public MonitorService(MonitorRepository monitors, IncidentRepository incidents,
-                          TargetUrlValidator urlValidator) {
+                          TargetUrlValidator urlValidator, CurrentUser currentUser) {
         this.monitors = monitors;
         this.incidents = incidents;
         this.urlValidator = urlValidator;
+        this.currentUser = currentUser;
     }
 
     public MonitorResponse create(MonitorRequest request) {
@@ -40,6 +43,7 @@ public class MonitorService {
         Monitor monitor = new Monitor(request.name().strip(), MonitorType.HTTP, request.url(),
                 request.intervalSecondsOrDefault(), request.timeoutMsOrDefault());
         applySettings(monitor, request);
+        monitor.setOwnerId(currentUser.id());
         Monitor saved = monitors.saveAndFlush(monitor);
         log.info("Created monitor {}", saved.getId());
         return MonitorResponse.from(saved);
@@ -52,7 +56,7 @@ public class MonitorService {
 
     @Transactional(readOnly = true)
     public PageResponse<MonitorResponse> list(Pageable pageable) {
-        return PageResponse.of(monitors.findAll(pageable), MonitorResponse::from);
+        return PageResponse.of(monitors.findAllByOwnerId(currentUser.id(), pageable), MonitorResponse::from);
     }
 
     /**
@@ -66,6 +70,7 @@ public class MonitorService {
         // Row lock: the worker locks the same row when applying check results, so status
         // and incident changes from both sides never interleave.
         Monitor monitor = monitors.findByIdForUpdate(id)
+                .filter(m -> currentUser.id().equals(m.getOwnerId()))
                 .orElseThrow(() -> new MonitorNotFoundException(id));
         if (expectedVersion != null && expectedVersion != monitor.getVersion()) {
             throw new PreconditionFailedException(
@@ -117,7 +122,9 @@ public class MonitorService {
     }
 
     private Monitor find(UUID id) {
-        return monitors.findById(id).orElseThrow(() -> new MonitorNotFoundException(id));
+        // Other users' monitors are indistinguishable from missing ones (no ID probing).
+        return monitors.findByIdAndOwnerId(id, currentUser.id())
+                .orElseThrow(() -> new MonitorNotFoundException(id));
     }
 
     private static void applySettings(Monitor monitor, MonitorRequest request) {

@@ -128,3 +128,10 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .secret-box > code { padding: 0.5rem; background: var(--surface); border-radius: 4px; }
 .secret-box button { align-self: flex-start; }
 .monitor-form + .table, .monitor-form + .error-banner { margin-top: 1.5rem; }
+
+.user-menu { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; font-size: 0.9rem; }
+.user-menu a { color: var(--muted); text-decoration: none; }
+.login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.login-form { width: 100%; max-width: 380px; }
+.login-form h1 { justify-content: center; }
+.success-banner { background: var(--up-bg); color: var(--up); padding: 0.75rem 1rem; border-radius: 6px; margin: 1rem 0; }

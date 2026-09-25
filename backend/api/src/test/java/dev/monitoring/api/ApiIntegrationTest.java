@@ -8,8 +8,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 /**
- * Full application on random ports with a real PostgreSQL and fake DNS. All classes using
- * this annotation share one cached Spring context and one database container.
+ * Full application on random ports with real PostgreSQL and Redis, fake DNS and a fixed clock.
+ * All classes using this annotation share one cached Spring context and one set of containers.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Import;
         properties = {"management.server.port=0", "POSTGRES_PASSWORD=provided-by-testcontainers",
                 // Test-only key (32 zero bytes); real deployments generate their own.
                 "ALERT_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="})
-@Import({PostgresTestcontainer.class, FakeDnsConfig.class, FixedClockConfig.class})
+@Import({PostgresTestcontainer.class, RedisTestcontainer.class, FakeDnsConfig.class,
+        FixedClockConfig.class, TestSessions.class})
 public @interface ApiIntegrationTest {
 }

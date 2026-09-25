@@ -14,7 +14,10 @@ public class AlertOutbox {
 
     private static final String ENQUEUE = """
             INSERT INTO alert_deliveries (channel_id, incident_id, event_type, payload)
-            SELECT c.id, ?, ?, CAST(? AS jsonb) FROM alert_channels c WHERE c.enabled
+            SELECT c.id, ?, ?, CAST(? AS jsonb)
+              FROM alert_channels c
+              JOIN monitors m ON m.owner_id = c.owner_id
+             WHERE c.enabled AND m.id = ?
             ON CONFLICT (incident_id, event_type, channel_id) WHERE incident_id IS NOT NULL
             DO NOTHING
             """;
@@ -27,8 +30,9 @@ public class AlertOutbox {
         this.json = json;
     }
 
-    /** @return number of deliveries queued (one per enabled channel) */
+    /** @return number of deliveries queued: one per enabled channel of the monitor's owner */
     public int enqueue(UUID incidentId, AlertPayload payload) {
-        return jdbc.update(ENQUEUE, incidentId, payload.event(), json.writeValueAsString(payload));
+        return jdbc.update(ENQUEUE, incidentId, payload.event(), json.writeValueAsString(payload),
+                payload.monitor().id());
     }
 }

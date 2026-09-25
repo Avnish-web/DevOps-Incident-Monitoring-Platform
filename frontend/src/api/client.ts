@@ -33,30 +33,55 @@ export interface ApiResponse<T> {
   headers: Headers;
 }
 
+const CSRF_COOKIE = 'XSRF-TOKEN';
+const CSRF_HEADER = 'X-XSRF-TOKEN';
+
+function readCookie(name: string): string | undefined {
+  const entry = document.cookie.split('; ').find((c) => c.startsWith(`${name}=`));
+  return entry ? decodeURIComponent(entry.slice(name.length + 1)) : undefined;
+}
+
+/** Asks the API to issue a CSRF cookie (the token is rotated at login). */
+export async function refreshCsrfToken(): Promise<string | undefined> {
+  await fetch('/api/v1/auth/csrf', { credentials: 'same-origin' });
+  return readCookie(CSRF_COOKIE);
+}
+
+async function csrfToken(): Promise<string | undefined> {
+  return readCookie(CSRF_COOKIE) ?? (await refreshCsrfToken());
+}
+
 /**
- * Minimal fetch wrapper: same-origin JSON requests (the dev server and Nginx proxy /api),
- * Problem Details errors turned into {@link ApiError}.
+ * Minimal fetch wrapper: same-origin JSON requests (the dev server and Nginx proxy /api) with
+ * the session cookie, a CSRF header on state-changing requests, and Problem Details errors
+ * turned into {@link ApiError}.
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
-  const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
-  let body: string | undefined;
-  if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    body = JSON.stringify(options.body);
-  }
+  const method = options.method ?? 'GET';
+  const send = async (token: string | undefined) => {
+    const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
+    let body: string | undefined;
+    if (options.body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(options.body);
+    }
+    if (method !== 'GET' && token) {
+      headers[CSRF_HEADER] = token;
+    }
+    return fetch(path, { method, headers, body, credentials: 'same-origin', signal: options.signal });
+  };
 
-  const response = await fetch(path, {
-    method: options.method ?? 'GET',
-    headers,
-    body,
-    credentials: 'same-origin',
-    signal: options.signal,
-  });
+  let response = await send(method === 'GET' ? undefined : await csrfToken());
+  if (response.status === 403 && method !== 'GET') {
+    // The token may have been rotated (e.g. after login): refresh once and retry.
+    response = await send(await refreshCsrfToken());
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, await readProblem(response));
   }
-  const data = response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+  const text = response.status === 204 ? '' : await response.text();
+  const data = (text ? JSON.parse(text) : undefined) as T;
   return { data, headers: response.headers };
 }
 

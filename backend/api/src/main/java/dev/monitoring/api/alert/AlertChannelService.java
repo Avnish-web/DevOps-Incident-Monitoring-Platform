@@ -1,5 +1,6 @@
 package dev.monitoring.api.alert;
 
+import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.NotFoundException;
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.common.crypto.SecretCipher;
@@ -32,11 +33,13 @@ public class AlertChannelService {
     private final SecretCipher cipher;
     private final JdbcTemplate jdbc;
     private final Clock clock;
+    private final CurrentUser currentUser;
     private final SecureRandom random = new SecureRandom();
 
     public AlertChannelService(AlertChannelRepository channels, AlertDeliveryRepository deliveries,
                                AlertTargetValidator validator, SecretCipher cipher,
-                               JdbcTemplate jdbc, Clock clock) {
+                               JdbcTemplate jdbc, Clock clock, CurrentUser currentUser) {
+        this.currentUser = currentUser;
         this.channels = channels;
         this.deliveries = deliveries;
         this.validator = validator;
@@ -50,6 +53,7 @@ public class AlertChannelService {
         AlertChannel channel = new AlertChannel(request.name().strip(), request.type(),
                 cipher.encrypt(target));
         channel.setEnabled(request.enabledOrDefault());
+        channel.setOwnerId(currentUser.id());
         String signingSecret = null;
         if (request.type() == AlertChannelType.WEBHOOK) {
             byte[] secret = new byte[32];
@@ -64,7 +68,7 @@ public class AlertChannelService {
 
     @Transactional(readOnly = true)
     public List<AlertChannelResponse> list() {
-        return channels.findAll(Sort.by("name").and(Sort.by("id"))).stream()
+        return channels.findAllByOwnerId(currentUser.id(), Sort.by("name").and(Sort.by("id"))).stream()
                 .map(c -> toResponse(c, cipher.decrypt(c.getTargetEncrypted()), null))
                 .toList();
     }
@@ -119,7 +123,8 @@ public class AlertChannelService {
     }
 
     private AlertChannel find(UUID id) {
-        return channels.findById(id).orElseThrow(() -> new NotFoundException("Alert channel"));
+        return channels.findByIdAndOwnerId(id, currentUser.id())
+                .orElseThrow(() -> new NotFoundException("Alert channel"));
     }
 
     private static AlertChannelResponse toResponse(AlertChannel c, String target, String signingSecret) {

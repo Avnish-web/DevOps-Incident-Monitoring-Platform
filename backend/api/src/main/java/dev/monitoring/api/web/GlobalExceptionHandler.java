@@ -1,6 +1,8 @@
 package dev.monitoring.api.web;
 
 import dev.monitoring.api.alert.InvalidAlertTargetException;
+import dev.monitoring.api.auth.AuthController;
+import dev.monitoring.api.user.UserService;
 import dev.monitoring.common.net.InvalidTargetUrlException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Comparator;
@@ -93,6 +95,39 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 HttpStatus.BAD_REQUEST, "Request validation failed");
         problem.setTitle("Invalid request");
         problem.setProperty("errors", List.of(new FieldViolation("url", ex.getMessage())));
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(AuthController.TooManyAttemptsException.class)
+    public ResponseEntity<Object> handleTooManyAttempts(AuthController.TooManyAttemptsException ex,
+                                                        WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        problem.setTitle("Too Many Requests");
+        return createResponseEntity(problem, ex.headers(), HttpStatus.TOO_MANY_REQUESTS, request);
+    }
+
+    @ExceptionHandler(AuthController.InvalidCredentialsException.class)
+    public ResponseEntity<Object> handleInvalidCredentials(AuthController.InvalidCredentialsException ex,
+                                                           WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problem.setTitle("Unauthorized");
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.UNAUTHORIZED, request);
+    }
+
+    @ExceptionHandler(AuthController.WeakPasswordException.class)
+    public ResponseEntity<Object> handleWeakPassword(AuthController.WeakPasswordException ex, WebRequest request) {
+        return fieldError("password", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserService.InvalidUserException.class)
+    public ResponseEntity<Object> handleInvalidUser(UserService.InvalidUserException ex, WebRequest request) {
+        return fieldError(ex.field(), ex.getMessage(), request);
+    }
+
+    private ResponseEntity<Object> fieldError(String field, String message, WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request validation failed");
+        problem.setTitle("Invalid request");
+        problem.setProperty("errors", List.of(new FieldViolation(field, message)));
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
     }
 

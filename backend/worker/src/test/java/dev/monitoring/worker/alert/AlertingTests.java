@@ -9,8 +9,10 @@ import dev.monitoring.common.domain.CheckErrorType;
 import dev.monitoring.common.domain.HttpCheckMethod;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorType;
+import dev.monitoring.common.domain.User;
 import dev.monitoring.common.repository.AlertChannelRepository;
 import dev.monitoring.common.repository.MonitorRepository;
+import dev.monitoring.common.repository.UserRepository;
 import dev.monitoring.worker.WorkerIntegrationTest;
 import dev.monitoring.worker.check.CheckOutcome;
 import dev.monitoring.worker.check.CheckResultRecorder;
@@ -58,7 +60,11 @@ class AlertingTests {
     @Autowired
     JsonMapper json;
 
+    @Autowired
+    UserRepository users;
+
     ClaimedMonitor monitor;
+    User owner;
 
     @BeforeAll
     static void startReceiver() throws Exception {
@@ -74,16 +80,24 @@ class AlertingTests {
     void setUp() {
         monitors.deleteAll();
         channels.deleteAll();
+        users.deleteAll();
         receiver.received.clear();
-        Monitor m = monitors.save(new Monitor("Shop <!channel>", MonitorType.HTTP,
-                "https://shop.example.com", 30, 5000));
+        owner = users.save(new User("owner@example.com", "{noop}unused", User.Role.USER));
+        Monitor m = new Monitor("Shop <!channel>", MonitorType.HTTP, "https://shop.example.com", 30, 5000);
+        m.setOwnerId(owner.getId());
+        m = monitors.save(m);
         jdbc.update("UPDATE monitors SET failure_threshold = 1, recovery_threshold = 1 WHERE id = ?", m.getId());
         monitor = new ClaimedMonitor(m.getId(), m.getUrl(), HttpCheckMethod.GET, 5000, null, 30);
     }
 
     private AlertChannel webhook(String path, boolean enabled) {
+        return webhook(path, enabled, owner);
+    }
+
+    private AlertChannel webhook(String path, boolean enabled, User channelOwner) {
         AlertChannel c = new AlertChannel("hook", AlertChannelType.WEBHOOK,
                 cipher.encrypt("http://127.0.0.1:" + receiver.port() + path));
+        c.setOwnerId(channelOwner.getId());
         c.setSigningSecretEncrypted(cipher.encrypt(SECRET));
         c.setEnabled(enabled);
         return channels.save(c);
@@ -122,6 +136,16 @@ class AlertingTests {
         assertThat(resolved.path("monitor").path("name").asString()).isEqualTo("Shop <!channel>");
         assertThat(resolved.path("incident").path("durationSeconds").asLong()).isEqualTo(60);
         assertThat(resolved.path("incident").path("cause").asString()).startsWith("TIMEOUT");
+    }
+
+    @Test
+    void otherUsersChannelsAreNeverNotified() {
+        User stranger = users.save(new User("stranger@example.com", "{noop}unused", User.Role.USER));
+        webhook("/hook", true, stranger);
+
+        fail(0);
+
+        assertThat(deliveries()).isEmpty();
     }
 
     @Test

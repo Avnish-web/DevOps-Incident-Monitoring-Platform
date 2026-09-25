@@ -1,6 +1,7 @@
 package dev.monitoring.api.incident;
 
 import dev.monitoring.api.incident.IncidentResponse.IncidentStatus;
+import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.NotFoundException;
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.common.domain.Incident;
@@ -8,6 +9,8 @@ import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.repository.IncidentRepository;
 import dev.monitoring.common.repository.MonitorRepository;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,15 +31,18 @@ public class IncidentService {
 
     private final IncidentRepository incidents;
     private final MonitorRepository monitors;
+    private final CurrentUser currentUser;
 
-    public IncidentService(IncidentRepository incidents, MonitorRepository monitors) {
+    public IncidentService(IncidentRepository incidents, MonitorRepository monitors,
+                           CurrentUser currentUser) {
         this.incidents = incidents;
         this.monitors = monitors;
+        this.currentUser = currentUser;
     }
 
     public PageResponse<IncidentResponse> list(IncidentStatus status, UUID monitorId,
                                                Pageable pageable) {
-        Page<Incident> page = incidents.findAll(filter(status, monitorId), pageable);
+        Page<Incident> page = incidents.findAll(filter(status, monitorId, currentUser.id()), pageable);
         Map<UUID, String> names = monitorNames(
                 page.getContent().stream().map(Incident::getMonitorId).collect(Collectors.toSet()));
         Instant now = Instant.now();
@@ -46,14 +52,20 @@ public class IncidentService {
 
     public IncidentResponse get(UUID id) {
         Incident incident = incidents.findById(id)
+                .filter(i -> monitors.existsByIdAndOwnerId(i.getMonitorId(), currentUser.id()))
                 .orElseThrow(() -> new NotFoundException("Incident"));
         String name = monitors.findById(incident.getMonitorId()).map(Monitor::getName).orElse(null);
         return IncidentResponse.from(incident, name, Instant.now());
     }
 
-    private static Specification<Incident> filter(IncidentStatus status, UUID monitorId) {
+    private static Specification<Incident> filter(IncidentStatus status, UUID monitorId, UUID ownerId) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // Only incidents of monitors owned by the current user.
+            Subquery<UUID> owned = query.subquery(UUID.class);
+            Root<Monitor> monitor = owned.from(Monitor.class);
+            owned.select(monitor.get("id")).where(cb.equal(monitor.get("ownerId"), ownerId));
+            predicates.add(root.get("monitorId").in(owned));
             if (monitorId != null) {
                 predicates.add(cb.equal(root.get("monitorId"), monitorId));
             }

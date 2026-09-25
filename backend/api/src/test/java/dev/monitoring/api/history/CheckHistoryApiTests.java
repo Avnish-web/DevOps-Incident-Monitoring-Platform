@@ -4,10 +4,12 @@ import static dev.monitoring.api.FixedClockConfig.NOW;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.monitoring.api.ApiIntegrationTest;
+import dev.monitoring.api.TestSessions;
 import dev.monitoring.common.domain.CheckErrorType;
 import dev.monitoring.common.domain.CheckResult;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorType;
+import dev.monitoring.common.domain.User;
 import dev.monitoring.common.repository.CheckResultRepository;
 import dev.monitoring.common.repository.MonitorRepository;
 import java.time.Duration;
@@ -34,12 +36,19 @@ class CheckHistoryApiTests {
     RestTestClient client;
     UUID monitorId;
 
+    @Autowired
+    TestSessions sessions;
+
+    User owner;
+
     @BeforeEach
     void setUp() {
         monitors.deleteAll();
-        client = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
-        monitorId = monitors.save(new Monitor("m", MonitorType.HTTP, "https://example.com", 60, 5000))
-                .getId();
+        owner = sessions.user("history@example.com");
+        client = sessions.login(port, owner);
+        Monitor m = new Monitor("m", MonitorType.HTTP, "https://example.com", 60, 5000);
+        m.setOwnerId(owner.getId());
+        monitorId = monitors.save(m).getId();
     }
 
     private void ok(Instant at, int latencyMs) {

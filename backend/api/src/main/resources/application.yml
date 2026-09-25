@@ -28,12 +28,31 @@ spring:
     # The API is the only service that migrates the schema (see docs/architecture.md §4).
     enabled: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+  session:
+    data:
+      redis:
+        # Indexed repository: lets the API end all sessions of a deleted user.
+        repository-type: indexed
+        namespace: monitoring:session
   jackson:
     deserialization:
       # Reject unexpected fields (e.g. "id", "status") instead of silently ignoring them.
       fail-on-unknown-properties: true
 
 monitoring:
+  auth:
+    # First administrator, created only when no users exist. Remove after first start.
+    bootstrap-admin:
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
+    max-failures-per-account: 5
+    max-failures-per-ip: 30
+    lockout-window: 15m
   alerting:
     # AES-256 key (base64, 32 bytes) encrypting alert channel targets at rest.
     # Must be identical for the API and the worker. Generate: openssl rand -base64 32
@@ -45,6 +64,18 @@ monitoring:
 server:
   port: ${API_PORT:8080}
   shutdown: graceful
+  # Behind Nginx: trust X-Forwarded-* only from internal proxy addresses (Tomcat RemoteIpValve),
+  # so rate limiting and logs see the real client IP.
+  forward-headers-strategy: native
+  servlet:
+    session:
+      timeout: ${SESSION_TIMEOUT:8h}
+      cookie:
+        name: SESSION
+        http-only: true
+        same-site: lax
+        # true in production (HTTPS); false only for plain-HTTP local development.
+        secure: ${SESSION_COOKIE_SECURE:false}
   error:
     include-stacktrace: never
     include-message: never
@@ -70,7 +101,7 @@ management:
         # Not ready to receive traffic without the database. Liveness deliberately excludes
         # it so a database outage does not cause restart loops.
         readiness:
-          include: readinessState,db
+          include: readinessState,db,redis
   info:
     env:
       enabled: false

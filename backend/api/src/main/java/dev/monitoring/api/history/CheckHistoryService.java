@@ -1,6 +1,7 @@
 package dev.monitoring.api.history;
 
 import dev.monitoring.api.monitor.MonitorNotFoundException;
+import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.common.repository.CheckResultRepository;
 import dev.monitoring.common.repository.MonitorRepository;
@@ -57,13 +58,15 @@ public class CheckHistoryService {
     private final CheckResultRepository checkResults;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock clock;
+    private final CurrentUser currentUser;
 
     public CheckHistoryService(MonitorRepository monitors, CheckResultRepository checkResults,
-                               NamedParameterJdbcTemplate jdbc, Clock clock) {
+                               NamedParameterJdbcTemplate jdbc, Clock clock, CurrentUser currentUser) {
         this.monitors = monitors;
         this.checkResults = checkResults;
         this.jdbc = jdbc;
         this.clock = clock;
+        this.currentUser = currentUser;
     }
 
     public PageResponse<CheckResultResponse> checks(UUID monitorId, Pageable pageable) {
@@ -123,7 +126,7 @@ public class CheckHistoryService {
     }
 
     private void requireMonitor(UUID id) {
-        if (!monitors.existsById(id)) {
+        if (!monitors.existsByIdAndOwnerId(id, currentUser.id())) {
             throw new MonitorNotFoundException(id);
         }
     }

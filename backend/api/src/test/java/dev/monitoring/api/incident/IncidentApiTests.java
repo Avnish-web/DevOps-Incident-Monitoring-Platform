@@ -3,11 +3,13 @@ package dev.monitoring.api.incident;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.monitoring.api.ApiIntegrationTest;
+import dev.monitoring.api.TestSessions;
 import dev.monitoring.common.domain.Incident;
 import dev.monitoring.common.domain.IncidentResolution;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorStatus;
 import dev.monitoring.common.domain.MonitorType;
+import dev.monitoring.common.domain.User;
 import dev.monitoring.common.repository.IncidentRepository;
 import dev.monitoring.common.repository.MonitorRepository;
 import java.time.Instant;
@@ -40,15 +42,22 @@ class IncidentApiTests {
 
     RestTestClient client;
 
+    @Autowired
+    TestSessions sessions;
+
+    User owner;
+
     @BeforeEach
     void setUp() {
         monitors.deleteAll();
-        client = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        owner = sessions.user("incidents@example.com");
+        client = sessions.login(port, owner);
     }
 
     private Monitor monitor(String name) {
-        return monitors.save(new Monitor(name, MonitorType.HTTP, "https://example.com/" + name,
-                60, 5000));
+        Monitor m = new Monitor(name, MonitorType.HTTP, "https://example.com/" + name, 60, 5000);
+        m.setOwnerId(owner.getId());
+        return monitors.save(m);
     }
 
     private Incident resolved(Monitor m, int startSecond, int endSecond) {

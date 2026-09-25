@@ -3,6 +3,8 @@ package dev.monitoring.api.monitor;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.monitoring.api.ApiIntegrationTest;
+import dev.monitoring.api.TestSessions;
+import dev.monitoring.common.domain.User;
 import dev.monitoring.common.repository.MonitorRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,10 +30,16 @@ class MonitorApiTests {
 
     RestTestClient client;
 
+    @Autowired
+    TestSessions sessions;
+
+    User owner;
+
     @BeforeEach
     void setUp() {
         monitorRepository.deleteAll();
-        client = RestTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
+        owner = sessions.user("monitors@example.com");
+        client = sessions.login(port, owner);
     }
 
     private static String body(String name, String url) {

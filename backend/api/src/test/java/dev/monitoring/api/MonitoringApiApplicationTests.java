@@ -28,9 +28,12 @@ class MonitoringApiApplicationTests {
     RestTestClient api;
     RestTestClient management;
 
+    @Autowired
+    TestSessions sessions;
+
     @BeforeEach
     void setUp() {
-        api = RestTestClient.bindToServer().baseUrl("http://localhost:" + serverPort).build();
+        api = sessions.login(serverPort, sessions.user("app@example.com"));
         management = RestTestClient.bindToServer()
                 .baseUrl("http://localhost:" + managementPort).build();
     }
@@ -57,8 +60,9 @@ class MonitoringApiApplicationTests {
 
     @Test
     void actuatorIsNotExposedOnPublicPort() {
+        // Everything outside /api is denied on the public port, even for a logged-in user.
         api.get().uri("/actuator/health").exchange()
-                .expectStatus().isNotFound();
+                .expectStatus().isForbidden();
     }
 
     @Test
