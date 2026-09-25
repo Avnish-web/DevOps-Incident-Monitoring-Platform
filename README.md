@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 14 — the full platform runs with one `docker compose up`: checks, incidents, history, alerting, auth, metrics and dashboards.
+> **Status:** Phase 15 — the full platform runs with one `docker compose up` behind a hardened Nginx.
 
 ## Architecture at a glance
 
@@ -34,8 +34,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 12 | Alerting | ✅ |
 | 13 | Authentication | ✅ |
 | 14 | Docker Compose | ✅ |
-| 15 | Nginx | ⏳ |
-| 16 | GitHub Actions CI/CD | |
+| 15 | Nginx | ✅ |
+| 16 | GitHub Actions CI/CD | ⏳ |
 | 17 | AWS deployment | |
 | 18 | Terraform | |
 | 19 | Security hardening | |
@@ -74,6 +74,27 @@ Grafana. It is hardened as follows:
 - **Startup order:** gated on health. The API (which migrates the schema) must be ready before
   the worker and Nginx start. `docker compose stop` sends SIGTERM for graceful shutdown.
 - **Ports:** all published ports are bound to `127.0.0.1`.
+
+**Nginx** (`infra/nginx/`) is the only public entry point:
+
+- **Routing:** serves the dashboard (SPA fallback, immutable caching for hashed assets, gzip) and
+  proxies `/api` with the client IP, scheme and a request ID. `/actuator`, `.env` and `.git`
+  return 404, and only GET/HEAD/POST/PUT/DELETE are allowed.
+- **Headers:** a strict CSP (`'self'` only, no inline scripts), `nosniff`, `DENY` framing,
+  `no-referrer`, a permissions policy and COOP/CORP. HSTS is sent whenever the original request was
+  HTTPS, including behind a load balancer (`X-Forwarded-Proto`).
+- **Limits:** 20 req/s per IP for the API, 10/min for login (in front of the API's own account
+  lockout), 1 MB bodies and short header/body timeouts. Nginx's own 429/502/503/504 for `/api` are
+  returned as Problem Details JSON.
+- **TLS** for self-hosting without a load balancer:
+
+  ```bash
+  scripts/dev-tls-cert.sh    # local self-signed certificate; use a real one in production
+  docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+  ```
+
+  This serves https://localhost:8443 (TLS 1.2/1.3, Mozilla intermediate ciphers), redirects HTTP
+  to HTTPS and sets `Secure` session cookies.
 
 To run the services from an IDE instead, start only the databases with the development overlay,
 which publishes them on localhost:

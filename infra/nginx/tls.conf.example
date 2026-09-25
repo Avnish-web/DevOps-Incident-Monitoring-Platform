@@ -1,0 +1,36 @@
+# Self-hosted TLS: replaces conf.d/default.conf via docker-compose.tls.yml.
+# Certificates are mounted at /etc/nginx/tls (fullchain.pem, privkey.pem), e.g. from
+# Let's Encrypt, or from scripts/dev-tls-cert.sh for local testing.
+
+upstream api {
+    server api:8080;
+    keepalive 16;
+}
+
+# Plain HTTP only redirects to HTTPS.
+server {
+    listen 8080;
+    server_name _;
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+
+    # Mozilla "intermediate" profile: TLS 1.2 + 1.3, forward-secret AEAD ciphers only.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:TLS:10m;
+    ssl_session_tickets off;
+
+    include /etc/nginx/snippets/app.conf;
+}

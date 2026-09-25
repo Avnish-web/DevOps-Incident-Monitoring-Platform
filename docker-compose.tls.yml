@@ -1,0 +1,18 @@
+# Self-hosted HTTPS overlay (when no load balancer terminates TLS in front of Nginx).
+#
+#   scripts/dev-tls-cert.sh                        # local testing only: self-signed certificate
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+#   open https://localhost:8443
+#
+# For a real domain, put fullchain.pem / privkey.pem (e.g. from Let's Encrypt) in
+# infra/nginx/certs and set SESSION_COOKIE_SECURE=true in .env.
+services:
+  web:
+    volumes:
+      - ./infra/nginx/tls.conf.example:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/tls:ro
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_TLS_PORT:-8443}:8443"
+  api:
+    environment:
+      SESSION_COOKIE_SECURE: "true"

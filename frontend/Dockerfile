@@ -14,7 +14,8 @@ LABEL org.opencontainers.image.title="monitoring-web" \
       org.opencontainers.image.licenses="MIT"
 COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/conf.d/ /etc/nginx/conf.d/
+COPY infra/nginx/snippets/ /etc/nginx/snippets/
 COPY --from=build /src/dist /usr/share/nginx/html
 # The base image runs as uid 101 and listens on 8080; nothing here needs root.
 USER 101
-EXPOSE 8080
+EXPOSE 8080 8443

@@ -35,3 +35,6 @@ Thumbs.db
 
 # Local tooling
 .code-review-graph/
+
+# Local TLS certificates (scripts/dev-tls-cert.sh)
+infra/nginx/certs/
