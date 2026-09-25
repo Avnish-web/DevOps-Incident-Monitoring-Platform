@@ -5,7 +5,8 @@ spring:
     # Max time to let in-flight requests finish on shutdown (SIGTERM).
     timeout-per-shutdown-phase: 20s
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}
+    # sslmode: prefer locally; set DB_SSLMODE=require (or verify-full) where the server enforces TLS (RDS).
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}?sslmode=${DB_SSLMODE:prefer}
     username: ${POSTGRES_USER:monitoring}
     # Intentionally no default: startup fails fast if the password is not provided.
     password: ${POSTGRES_PASSWORD}
@@ -33,12 +34,18 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       timeout: 2s
+      # TLS in transit (ElastiCache); plain inside the local Docker network.
+      ssl:
+        enabled: ${REDIS_SSL:false}
   session:
     data:
       redis:
         # Indexed repository: lets the API end all sessions of a deleted user.
         repository-type: indexed
         namespace: monitoring:session
+        # Managed Redis (ElastiCache) forbids CONFIG: set SESSION_REDIS_CONFIGURE_ACTION=none there
+        # and configure notify-keyspace-events=Egx in its parameter group instead (Terraform does).
+        configure-action: ${SESSION_REDIS_CONFIGURE_ACTION:notify-keyspace-events}
   jackson:
     deserialization:
       # Reject unexpected fields (e.g. "id", "status") instead of silently ignoring them.

@@ -2,7 +2,8 @@ spring:
   application:
     name: monitoring-worker
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}
+    # sslmode: prefer locally; set DB_SSLMODE=require (or verify-full) where the server enforces TLS (RDS).
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:monitoring}?sslmode=${DB_SSLMODE:prefer}
     username: ${POSTGRES_USER:monitoring}
     # Intentionally no default: startup fails fast if the password is not provided.
     password: ${POSTGRES_PASSWORD}

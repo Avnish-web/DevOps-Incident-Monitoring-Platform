@@ -1,0 +1,88 @@
+# Deploys a released version to AWS (ECS Fargate) with Terraform. Manual, gated by the
+# "production" GitHub Environment (configure required reviewers there).
+#
+# One-time setup (see docs/deployment.md):
+#   - apply deploy/terraform/bootstrap (state bucket, GitHub OIDC provider, deploy role)
+#   - repository variables: AWS_REGION, AWS_DEPLOY_ROLE_ARN, TF_STATE_BUCKET
+# No long-lived AWS keys are stored in GitHub: the job assumes the role via OIDC.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag to deploy (e.g. v0.1.0); must have been published by the Release workflow"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: production
+    permissions:
+      contents: read
+      id-token: write   # OIDC federation to AWS
+      packages: read    # pull release images from GHCR
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Validate version input
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid version: $VERSION"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.version }}
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Copy release images from GHCR to ECR (all architectures, same digests)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          account=$(aws sts get-caller-identity --query Account --output text)
+          ecr="${account}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$ecr"
+          echo "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+          semver="${VERSION#v}"
+          for image in api worker web; do
+            docker buildx imagetools create \
+              --tag "${ecr}/monitoring-${image}:${VERSION}" \
+              "ghcr.io/${OWNER}/monitoring-${image}:${semver}"
+          done
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.4
+
+      - name: Terraform apply
+        working-directory: deploy/terraform/environments/production
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="region=${AWS_REGION}"
+          terraform apply -input=false -auto-approve -var "image_tag=${VERSION}"
+
+      - name: Wait for services to become stable
+        run: |
+          aws ecs wait services-stable --cluster monitoring-production \
+            --services monitoring-api monitoring-worker monitoring-web
