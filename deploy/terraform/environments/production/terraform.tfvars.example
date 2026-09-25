@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars (git-ignored) for local plans. In CI, image_tag comes from the
+# deploy workflow; the remaining values can live in terraform.tfvars committed to a private
+# ops repository, or be passed as TF_VAR_* repository variables.
+region             = "eu-central-1"
+availability_zones = ["eu-central-1a", "eu-central-1b"]
+certificate_arn    = "arn:aws:acm:eu-central-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"
+admin_email        = "admin@example.com"
+alarm_email        = "oncall@example.com"
+
+# E-mail alerts via Amazon SES SMTP (store the SMTP password in the generated
+# monitoring-production/smtp-password secret).
+smtp_host        = "email-smtp.eu-central-1.amazonaws.com"
+smtp_username    = "AKIA..."
+alert_email_from = "monitoring@example.com"
+
+# Lower-cost settings for a portfolio/demo environment (not highly available):
+# single_nat_gateway = true
+# db_multi_az        = false
+# redis_replicas     = 0
