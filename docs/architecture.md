@@ -221,7 +221,7 @@ sessions and rate limiting instead.)*
 - Only real recoveries send a "resolved" alert. Incidents closed because a monitor was paused or
   changed do not notify.
 
-## 6. Data model (initial draft)
+## 6. Data model
 
 ```mermaid
 erDiagram
@@ -348,20 +348,45 @@ Configuration never contains a secret default value.
 
 ## 12. Deployment path
 
-1. **Local:** Docker Compose runs the whole stack (Phase 14).
-2. **CI:** GitHub Actions runs build, unit and integration tests (Testcontainers), and image build and scan (Phase 16).
-3. **AWS:** ECS Fargate (API and worker), RDS PostgreSQL, ElastiCache Redis, ALB, S3 and
-   CloudFront for the SPA, Secrets Manager. Provisioned with Terraform (Phases 17–18).
-4. **Kubernetes-ready:** stateless services, configuration from the environment, health probes, and graceful
-   shutdown. Moving to Kubernetes means writing manifests, not changing the application.
+1. **Local:** Docker Compose runs the whole stack behind Nginx (`docker compose up -d --build`).
+2. **CI** (`.github/workflows/ci.yml`):
+   - build and tests (Testcontainers)
+   - frontend lint, types, tests and build
+   - Prometheus rule tests, Nginx and Compose validation, Terraform validation
+   - Trivy image and misconfiguration scans, gitleaks, CodeQL, dependency review
+3. **Release:** version tags build multi-arch images with SBOM and provenance, sign them with
+   cosign and push them to GHCR.
+4. **AWS:** the gated `Deploy` workflow copies release images to ECR and applies Terraform. The
+   services run on ECS Fargate (web, api, worker) behind WAF and an ALB, with RDS PostgreSQL,
+   ElastiCache Redis and Secrets Manager. *(Design change: the SPA is served by the same Nginx image
+   as in Compose rather than S3/CloudFront, so one artifact runs everywhere.)* See
+   [deployment.md](deployment.md).
+5. **Kubernetes-ready:** services are stateless, take configuration from the environment, have
+   liveness/readiness probes, a fixed non-root UID and graceful shutdown. Moving to Kubernetes means
+   writing manifests, not changing the application.
 
-## 13. Technology versions (baseline)
+## 14. Design decisions and their reasons
+
+| Decision | Instead of | Why |
+|----------|------------|-----|
+| PostgreSQL `SKIP LOCKED` scheduling | A message broker job queue | The database already decides which checks are due. This adds no second source of truth, and the schedule survives restarts. |
+| Transactional outbox for alerts | Redis Streams | Alerts commit atomically with incidents, so none can be lost between the database and a queue. |
+| Server-side sessions in Redis | JWTs in the browser | HttpOnly cookies are not readable by XSS; revocation is immediate; API replicas stay stateless. |
+| Guarded DNS resolver in the HTTP client | Validating URLs only when saved | Also covers DNS rebinding, redirects and IP literals, because the check applies to every connection. |
+| Apache HttpClient 5 | JDK `HttpClient` | Pluggable DNS resolution (needed for the SSRF guard) and per-request connect timeouts. |
+| Statistics in SQL (`date_bin`, `percentile_cont`) | Aggregation in Java | Only the aggregated data leaves the database, and the math is exact. |
+| One Nginx image for Compose and AWS | S3 + CloudFront for the SPA | The same artifact and security headers everywhere; Service Connect keeps the `api` hostname. |
+
+## 15. Technology versions
 
 | Area | Choice |
 |------|--------|
-| Java | 17 LTS (installed locally); Java 21 is a drop-in upgrade for virtual threads |
-| Framework | Spring Boot 4.1.x (Spring Framework 7), Maven 3.9 via wrapper |
-| DB migrations | Flyway |
-| Database / cache | PostgreSQL 17, Redis 7 |
-| Frontend | React 18+, TypeScript, Vite, TanStack Query, Recharts |
-| Testing | JUnit 5, Testcontainers, Vitest |
+| Java | 17 LTS (Temurin); Java 21 is a drop-in upgrade for virtual threads |
+| Framework | Spring Boot 4.1 (Spring Framework 7, Spring Security 7, Spring Session 4), Maven 3.9 via wrapper |
+| Data | PostgreSQL 17 with Flyway, Hibernate 7; Redis 8 locally / ElastiCache Redis 7 on AWS |
+| HTTP checks | Apache HttpClient 5.6 |
+| Frontend | React 19, TypeScript 6, Vite 8, TanStack Query 5, React Router 8, Recharts 3 |
+| Observability | Micrometer + Prometheus 3, Grafana 13 |
+| Edge | Nginx 1.31 (unprivileged) |
+| Testing | JUnit 5, Testcontainers 2, Awaitility, Vitest 5, Testing Library |
+| Delivery | GitHub Actions, Trivy, CodeQL, gitleaks, cosign; Terraform 1.16 with AWS provider 6 |
