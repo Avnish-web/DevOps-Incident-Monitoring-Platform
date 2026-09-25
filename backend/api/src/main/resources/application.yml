@@ -52,6 +52,10 @@ spring:
       fail-on-unknown-properties: true
 
 monitoring:
+  limits:
+    # Abuse protection: one account cannot make the worker flood third-party hosts.
+    max-monitors-per-user: ${MAX_MONITORS_PER_USER:100}
+    max-alert-channels-per-user: ${MAX_ALERT_CHANNELS_PER_USER:20}
   auth:
     # First administrator, created only when no users exist. Remove after first start.
     bootstrap-admin:

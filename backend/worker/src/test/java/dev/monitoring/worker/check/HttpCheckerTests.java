@@ -265,8 +265,10 @@ class HttpCheckerTests {
             });
             responder.start();
 
-            CheckOutcome outcome = checker.check(
-                    monitor("https://target.test:" + plain.getLocalPort() + "/ok"));
+            // Generous deadline: this may be the JVM's first TLS handshake (SSL context
+            // initialization), which is slow on a busy CI machine.
+            CheckOutcome outcome = checker.check(monitor(
+                    "https://target.test:" + plain.getLocalPort() + "/ok", HttpCheckMethod.GET, 5000, null));
 
             assertThat(outcome.errorType()).isEqualTo(CheckErrorType.TLS_ERROR);
             assertThat(outcome.errorMessage()).startsWith("TLS error");

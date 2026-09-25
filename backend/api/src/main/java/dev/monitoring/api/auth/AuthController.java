@@ -1,5 +1,6 @@
 package dev.monitoring.api.auth;
 
+import dev.monitoring.api.security.AuditLog;
 import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.security.LoginRateLimiter;
 import dev.monitoring.api.security.PasswordPolicy;
@@ -15,8 +16,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -45,8 +44,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping(path = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
 public class AuthController {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     /**
      * Same cookie settings as {@code csrf.spa()} (XSRF-TOKEN, readable by the SPA). Used only
@@ -104,7 +101,7 @@ public class AuthController {
         String ip = request.getRemoteAddr();
         Optional<Duration> blocked = rateLimiter.blockedFor(email, ip);
         if (blocked.isPresent()) {
-            log.warn("Login blocked by rate limiter");
+            AuditLog.loginBlocked(email, ip);
             throw new TooManyAttemptsException(blocked.get());
         }
 
@@ -114,7 +111,7 @@ public class AuthController {
                     UsernamePasswordAuthenticationToken.unauthenticated(email, body.password()));
         } catch (AuthenticationException e) {
             rateLimiter.recordFailure(email, ip);
-            log.info("Failed login attempt");
+            AuditLog.loginFailed(email, ip);
             // Same message for unknown user, wrong password and disabled account.
             throw new InvalidCredentialsException();
         }
@@ -133,7 +130,7 @@ public class AuthController {
 
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
         users.findById(principal.id()).ifPresent(u -> u.setLastLoginAt(clock.instant()));
-        log.info("User {} logged in", principal.id());
+        AuditLog.loginSucceeded(principal.id(), ip);
         return ResponseEntity.ok(MeResponse.of(principal));
     }
 
@@ -147,14 +144,16 @@ public class AuthController {
     public ResponseEntity<Void> changePassword(@Valid @RequestBody ChangePasswordRequest body) {
         User user = users.findById(currentUser.id()).orElseThrow(InvalidCredentialsException::new);
         if (!passwordEncoder.matches(body.currentPassword(), user.getPasswordHash())) {
+            AuditLog.passwordChangeRejected(user.getId(), "wrong_current_password");
             throw new InvalidCredentialsException();
         }
         String violation = PasswordPolicy.violation(body.newPassword(), user.getEmail());
         if (violation != null) {
+            AuditLog.passwordChangeRejected(user.getId(), "policy");
             throw new WeakPasswordException(violation);
         }
         user.setPasswordHash(passwordEncoder.encode(body.newPassword()));
-        log.info("User {} changed their password", user.getId());
+        AuditLog.passwordChanged(user.getId());
         return ResponseEntity.noContent().build();
     }
 

@@ -149,6 +149,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return createResponseEntity(problem, new HttpHeaders(), HttpStatus.NOT_FOUND, request);
     }
 
+    @ExceptionHandler(QuotaExceededException.class)
+    public ResponseEntity<Object> handleQuota(QuotaExceededException ex, WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Limit reached");
+        return createResponseEntity(problem, new HttpHeaders(), HttpStatus.CONFLICT, request);
+    }
+
     @ExceptionHandler(PreconditionFailedException.class)
     public ResponseEntity<Object> handlePreconditionFailed(PreconditionFailedException ex,
                                                            WebRequest request) {

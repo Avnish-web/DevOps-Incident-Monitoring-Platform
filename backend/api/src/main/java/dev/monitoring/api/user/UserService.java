@@ -1,6 +1,7 @@
 package dev.monitoring.api.user;
 
 import dev.monitoring.api.auth.AuthController.WeakPasswordException;
+import dev.monitoring.api.security.AuditLog;
 import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.security.PasswordPolicy;
 import dev.monitoring.api.web.NotFoundException;
@@ -9,8 +10,6 @@ import dev.monitoring.common.repository.UserRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
@@ -22,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class UserService {
 
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private static final Pattern EMAIL = Pattern.compile(
             "^[a-z0-9._%+'-]{1,64}@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$");
 
@@ -57,7 +55,7 @@ public class UserService {
             throw new InvalidUserException("email", "A user with this e-mail already exists");
         }
         User user = users.saveAndFlush(new User(email, passwordEncoder.encode(password), role));
-        log.info("User {} created with role {}", user.getId(), role);
+        AuditLog.userCreated(currentUser.id(), user.getId(), role.name());
         return user;
     }
 
@@ -68,8 +66,9 @@ public class UserService {
         }
         User user = users.findById(id).orElseThrow(() -> new NotFoundException("User"));
         users.delete(user);
-        sessions.findByPrincipalName(user.getEmail()).keySet().forEach(sessions::deleteById);
-        log.info("User {} deleted and signed out", id);
+        var userSessions = sessions.findByPrincipalName(user.getEmail()).keySet();
+        userSessions.forEach(sessions::deleteById);
+        AuditLog.userDeleted(currentUser.id(), id, userSessions.size());
     }
 
     /** 400 with a field error. */

@@ -3,6 +3,7 @@ package dev.monitoring.api.alert;
 import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.NotFoundException;
 import dev.monitoring.api.web.PageResponse;
+import dev.monitoring.api.web.QuotaExceededException;
 import dev.monitoring.common.crypto.SecretCipher;
 import dev.monitoring.common.domain.AlertChannel;
 import dev.monitoring.common.domain.AlertChannelType;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -34,12 +36,15 @@ public class AlertChannelService {
     private final JdbcTemplate jdbc;
     private final Clock clock;
     private final CurrentUser currentUser;
+    private final long maxChannelsPerUser;
     private final SecureRandom random = new SecureRandom();
 
     public AlertChannelService(AlertChannelRepository channels, AlertDeliveryRepository deliveries,
                                AlertTargetValidator validator, SecretCipher cipher,
-                               JdbcTemplate jdbc, Clock clock, CurrentUser currentUser) {
+                               JdbcTemplate jdbc, Clock clock, CurrentUser currentUser,
+                               @Value("${monitoring.limits.max-alert-channels-per-user:20}") long maxChannelsPerUser) {
         this.currentUser = currentUser;
+        this.maxChannelsPerUser = maxChannelsPerUser;
         this.channels = channels;
         this.deliveries = deliveries;
         this.validator = validator;
@@ -49,6 +54,9 @@ public class AlertChannelService {
     }
 
     public AlertChannelResponse create(AlertChannelRequest request) {
+        if (channels.countByOwnerId(currentUser.id()) >= maxChannelsPerUser) {
+            throw new QuotaExceededException("alert channels", maxChannelsPerUser);
+        }
         String target = validator.validate(request.type(), request.target());
         AlertChannel channel = new AlertChannel(request.name().strip(), request.type(),
                 cipher.encrypt(target));

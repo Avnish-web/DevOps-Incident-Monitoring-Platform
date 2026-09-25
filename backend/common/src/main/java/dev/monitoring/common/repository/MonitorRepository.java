@@ -26,4 +26,6 @@ public interface MonitorRepository extends JpaRepository<Monitor, UUID> {
     Page<Monitor> findAllByOwnerId(UUID ownerId, Pageable pageable);
 
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
+
+    long countByOwnerId(UUID ownerId);
 }

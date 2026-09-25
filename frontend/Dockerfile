@@ -12,6 +12,9 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.31.6-alpine3.24
 LABEL org.opencontainers.image.title="monitoring-web" \
       org.opencontainers.image.licenses="MIT"
+# OS security fixes released after the base image was built (e.g. libexpat).
+USER root
+RUN apk upgrade --no-cache
 COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY infra/nginx/conf.d/ /etc/nginx/conf.d/
 COPY infra/nginx/snippets/ /etc/nginx/snippets/

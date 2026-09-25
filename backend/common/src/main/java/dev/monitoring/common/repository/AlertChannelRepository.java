@@ -12,4 +12,6 @@ public interface AlertChannelRepository extends JpaRepository<AlertChannel, UUID
     Optional<AlertChannel> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     List<AlertChannel> findAllByOwnerId(UUID ownerId, Sort sort);
+
+    long countByOwnerId(UUID ownerId);
 }

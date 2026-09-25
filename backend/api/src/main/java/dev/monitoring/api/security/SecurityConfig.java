@@ -64,6 +64,11 @@ public class SecurityConfig {
                 .requestCache(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout
                         .logoutUrl("/api/v1/auth/logout")
+                        .addLogoutHandler((request, response, auth) -> {
+                            if (auth != null) {
+                                AuditLog.logout(auth.getName());
+                            }
+                        })
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(problems.unauthorized())

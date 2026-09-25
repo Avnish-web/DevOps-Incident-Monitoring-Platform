@@ -3,6 +3,7 @@ package dev.monitoring.api.monitor;
 import dev.monitoring.api.security.CurrentUser;
 import dev.monitoring.api.web.PageResponse;
 import dev.monitoring.api.web.PreconditionFailedException;
+import dev.monitoring.api.web.QuotaExceededException;
 import dev.monitoring.common.domain.IncidentResolution;
 import dev.monitoring.common.domain.Monitor;
 import dev.monitoring.common.domain.MonitorStatus;
@@ -15,6 +16,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +31,23 @@ public class MonitorService {
     private final IncidentRepository incidents;
     private final TargetUrlValidator urlValidator;
     private final CurrentUser currentUser;
+    private final long maxMonitorsPerUser;
 
     public MonitorService(MonitorRepository monitors, IncidentRepository incidents,
-                          TargetUrlValidator urlValidator, CurrentUser currentUser) {
+                          TargetUrlValidator urlValidator, CurrentUser currentUser,
+                          @Value("${monitoring.limits.max-monitors-per-user:100}") long maxMonitorsPerUser) {
         this.monitors = monitors;
         this.incidents = incidents;
         this.urlValidator = urlValidator;
         this.currentUser = currentUser;
+        this.maxMonitorsPerUser = maxMonitorsPerUser;
     }
 
     public MonitorResponse create(MonitorRequest request) {
+        // Soft limit: two concurrent creates may exceed it by one, which is acceptable.
+        if (monitors.countByOwnerId(currentUser.id()) >= maxMonitorsPerUser) {
+            throw new QuotaExceededException("monitors", maxMonitorsPerUser);
+        }
         urlValidator.validate(request.url());
         Monitor monitor = new Monitor(request.name().strip(), MonitorType.HTTP, request.url(),
                 request.intervalSecondsOrDefault(), request.timeoutMsOrDefault());

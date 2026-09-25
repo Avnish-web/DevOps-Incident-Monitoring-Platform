@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import dev.monitoring.api.security.ProblemResponses;
 import dev.monitoring.testsupport.ErrorProbeController;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 // Only the probe controller: the handler is tested in isolation from real controllers.
 @WebMvcTest(controllers = ErrorProbeController.class)
-@Import(ErrorProbeController.class)
+// ProblemResponses: needed by the session-store filter, which the web slice includes.
+@Import({ErrorProbeController.class, ProblemResponses.class})
 @WithMockUser
 class GlobalExceptionHandlerTests {
 

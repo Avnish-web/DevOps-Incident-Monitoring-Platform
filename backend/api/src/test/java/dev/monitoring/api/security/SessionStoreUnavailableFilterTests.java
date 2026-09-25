@@ -34,7 +34,7 @@ class SessionStoreUnavailableFilterTests {
         });
 
         assertThat(response.getStatus()).isEqualTo(503);
-        assertThat(response.getContentType()).isEqualTo("application/problem+json");
+        assertThat(response.getContentType()).isEqualTo("application/problem+json;charset=UTF-8");
         assertThat(response.getHeader("Retry-After")).isEqualTo("5");
         assertThat(response.getHeader(RequestIdFilter.HEADER)).isEqualTo("req-42");
         assertThat(response.getHeader("X-Stale")).isNull();

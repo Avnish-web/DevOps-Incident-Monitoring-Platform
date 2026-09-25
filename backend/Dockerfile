@@ -32,8 +32,9 @@ LABEL org.opencontainers.image.title="monitoring-${MODULE}" \
       org.opencontainers.image.source="https://github.com/monitoring-platform/monitoring" \
       org.opencontainers.image.licenses="MIT"
 
-# Unprivileged user with a fixed UID (matches runAsUser in Kubernetes).
-RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
+# Pick up OS security fixes released after the base image was built (e.g. libexpat), then
+# create an unprivileged user with a fixed UID (matches runAsUser in Kubernetes).
+RUN apk upgrade --no-cache  && addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app
 WORKDIR /app
 
 # Layers from least to most frequently changing, for small image updates.
