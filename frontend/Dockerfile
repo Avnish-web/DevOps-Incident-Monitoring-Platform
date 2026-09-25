@@ -2,7 +2,7 @@
 # Dashboard: static build served by an unprivileged Nginx that also proxies /api (infra/nginx).
 # Build context is the repository root so the Nginx config can be included.
 
-FROM node:24.21.0-alpine3.24 AS build
+FROM node:26.9.0-alpine3.24 AS build
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
