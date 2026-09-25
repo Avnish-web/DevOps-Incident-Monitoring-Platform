@@ -1,0 +1,17 @@
+# Development overlay: exposes PostgreSQL and Redis on localhost so the API and worker can run
+# from an IDE or `mvnw spring-boot:run` (see README).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+#
+# Docker does not publish ports of containers attached only to an internal network, so this
+# overlay also attaches them to "edge". Do not use it on shared or production hosts.
+services:
+  postgres:
+    networks: [data, edge]
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+
+  redis:
+    networks: [data, edge]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"

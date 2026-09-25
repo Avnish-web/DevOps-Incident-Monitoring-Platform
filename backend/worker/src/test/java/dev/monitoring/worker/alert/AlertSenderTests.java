@@ -51,7 +51,7 @@ class AlertSenderTests {
     @Test
     void emailIsSentThroughConfiguredSmtp() throws Exception {
         JavaMailSender mail = mock(JavaMailSender.class);
-        new EmailSender(provider(mail), "alerts@example.com").send(1, "ops@example.com", null, OPENED, "{}");
+        new EmailSender(provider(mail), "alerts@example.com", "smtp.example.com").send(1, "ops@example.com", null, OPENED, "{}");
 
         ArgumentCaptor<SimpleMailMessage> sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail).send(sent.capture());
@@ -62,13 +62,16 @@ class AlertSenderTests {
 
     @Test
     void emailFailsClearlyWhenSmtpIsMissingOrDown() {
-        assertThatThrownBy(() -> new EmailSender(provider(null), "a@example.com")
+        assertThatThrownBy(() -> new EmailSender(provider(null), "a@example.com", "smtp.example.com")
+                .send(1, "ops@example.com", null, OPENED, "{}"))
+                .isInstanceOf(AlertDeliveryException.class).hasMessageContaining("not configured");
+        assertThatThrownBy(() -> new EmailSender(provider(mock(JavaMailSender.class)), "a@example.com", " ")
                 .send(1, "ops@example.com", null, OPENED, "{}"))
                 .isInstanceOf(AlertDeliveryException.class).hasMessageContaining("not configured");
 
         JavaMailSender broken = mock(JavaMailSender.class);
         doThrow(new MailSendException("connection refused")).when(broken).send(any(SimpleMailMessage.class));
-        assertThatThrownBy(() -> new EmailSender(provider(broken), "a@example.com")
+        assertThatThrownBy(() -> new EmailSender(provider(broken), "a@example.com", "smtp.example.com")
                 .send(1, "ops@example.com", null, OPENED, "{}"))
                 .isInstanceOf(AlertDeliveryException.class).hasMessageContaining("SMTP delivery failed");
     }

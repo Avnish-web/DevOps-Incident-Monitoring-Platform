@@ -51,6 +51,7 @@ public class ProblemResponses {
             body.put("requestId", requestId);
         }
         response.setStatus(status.value());
+        response.setCharacterEncoding("UTF-8");
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(json.writeValueAsString(body));
     }

@@ -331,6 +331,15 @@ as later migrations; existing migrations are never edited.
   cardinality bounded.
 - **Dashboards:** Grafana dashboards provisioned from JSON in `infra/grafana`.
 
+## 10a. Resilience notes (found while containerizing)
+
+- **Redis DNS:** Lettuce's default Netty DNS resolver caches answers for the record TTL (600 s in
+  Docker's DNS), so a Redis that came back on a new IP stayed unreachable. The API now resolves
+  through the JDK resolver (short JVM cache). The same failure mode applies to Kubernetes pod
+  rescheduling and managed-Redis failover.
+- **Session store outage:** Spring Session fails before Spring MVC runs. A dedicated filter turns
+  those failures into a Problem Details `503` with `Retry-After`, instead of Tomcat's HTML error page.
+
 ## 11. Configuration
 
 Everything is set through environment variables following Spring's relaxed binding, and documented in

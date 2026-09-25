@@ -1,0 +1,11 @@
+# Build context for the web image is the repository root: keep it small and secret-free.
+.git/
+.env
+.env.*
+**/node_modules/
+**/dist/
+**/target/
+backend/
+deploy/
+docs/
+.code-review-graph/

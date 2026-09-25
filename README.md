@@ -3,7 +3,7 @@
 A self-hosted platform that monitors websites and APIs, records response-time history,
 detects incidents, exposes Prometheus metrics, and sends alerts.
 
-> **Status:** Phase 13 — multi-user platform with session authentication: checks, incidents, history, metrics, dashboards and alerting.
+> **Status:** Phase 14 — the full platform runs with one `docker compose up`: checks, incidents, history, alerting, auth, metrics and dashboards.
 
 ## Architecture at a glance
 
@@ -33,8 +33,8 @@ the scheduling model, incident state machine, data model, and security principle
 | 11 | Grafana dashboards | ✅ |
 | 12 | Alerting | ✅ |
 | 13 | Authentication | ✅ |
-| 14 | Docker Compose | ⏳ |
-| 15 | Nginx | |
+| 14 | Docker Compose | ✅ |
+| 15 | Nginx | ⏳ |
 | 16 | GitHub Actions CI/CD | |
 | 17 | AWS deployment | |
 | 18 | Terraform | |
@@ -48,11 +48,45 @@ the scheduling model, incident state machine, data model, and security principle
 - Docker with Docker Compose v2
 - Git
 
+## Quick start (Docker Compose)
+
+```bash
+cp .env.example .env     # then set every secret: POSTGRES_PASSWORD, REDIS_PASSWORD,
+                         # ALERT_ENCRYPTION_KEY (openssl rand -base64 32), ADMIN_EMAIL,
+                         # ADMIN_PASSWORD, GRAFANA_ADMIN_PASSWORD
+docker compose up -d --build
+```
+
+| URL | What |
+|-----|------|
+| http://localhost:8080 | Dashboard and API (`/api`), behind Nginx; sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD` |
+| http://localhost:3000 | Grafana (`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`) |
+| http://localhost:9090 | Prometheus |
+
+The stack runs PostgreSQL, Redis, the API, the worker, Nginx with the dashboard, Prometheus and
+Grafana. It is hardened as follows:
+
+- **Network isolation:** PostgreSQL and Redis sit on an `internal` network (unreachable from the
+  host, no internet access). Only the worker and API get outbound access, for checks, alerts and
+  DNS validation.
+- **Containers:** every application container runs as a non-root user with a read-only root
+  filesystem, all capabilities dropped, `no-new-privileges`, memory/CPU/PID limits and rotated logs.
+- **Startup order:** gated on health. The API (which migrates the schema) must be ready before
+  the worker and Nginx start. `docker compose stop` sends SIGTERM for graceful shutdown.
+- **Ports:** all published ports are bound to `127.0.0.1`.
+
+To run the services from an IDE instead, start only the databases with the development overlay,
+which publishes them on localhost:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+```
+
 ## Running the API locally
 
 ```bash
-cp .env.example .env              # then set a real POSTGRES_PASSWORD
-docker compose up -d --wait       # PostgreSQL 17 on 127.0.0.1:${DB_PORT}
+cp .env.example .env              # then set the secrets (see Quick start)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait postgres redis
 
 cd backend
 ./mvnw verify                     # build + tests (tests start their own PostgreSQL via Testcontainers)

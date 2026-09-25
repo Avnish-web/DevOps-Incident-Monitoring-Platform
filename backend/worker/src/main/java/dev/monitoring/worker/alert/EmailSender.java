@@ -17,11 +17,15 @@ public class EmailSender implements AlertSender {
 
     private final ObjectProvider<JavaMailSender> mailSender;
     private final String from;
+    private final boolean smtpConfigured;
 
     public EmailSender(ObjectProvider<JavaMailSender> mailSender,
-                       @Value("${monitoring.alerting.email.from:monitoring@localhost}") String from) {
+                       @Value("${monitoring.alerting.email.from:monitoring@localhost}") String from,
+                       @Value("${spring.mail.host:}") String smtpHost) {
         this.mailSender = mailSender;
         this.from = from;
+        // An empty SPRING_MAIL_HOST (e.g. passed through by Compose) still creates a sender.
+        this.smtpConfigured = !smtpHost.isBlank();
     }
 
     @Override
@@ -32,7 +36,7 @@ public class EmailSender implements AlertSender {
     @Override
     public void send(long deliveryId, String target, String signingSecret, AlertPayload payload,
                      String rawPayload) throws AlertDeliveryException {
-        JavaMailSender sender = mailSender.getIfAvailable();
+        JavaMailSender sender = smtpConfigured ? mailSender.getIfAvailable() : null;
         if (sender == null) {
             throw new AlertDeliveryException("E-mail is not configured (set SPRING_MAIL_HOST)");
         }
