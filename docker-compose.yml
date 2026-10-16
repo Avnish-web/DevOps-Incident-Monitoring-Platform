@@ -208,7 +208,7 @@ services:
   # Point the worker at it with SPRING_MAIL_HOST=mailpit and SPRING_MAIL_PORT=1025.
   mailpit:
     <<: *hardening
-    image: axllent/mailpit:v1.31.2
+    image: axllent/mailpit:v1.31.5
     profiles: ["dev"]
     restart: unless-stopped
     networks: [edge]
