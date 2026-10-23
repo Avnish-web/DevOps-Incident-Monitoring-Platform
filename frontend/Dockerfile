@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.31.6-alpine3.24
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine3.24
 LABEL org.opencontainers.image.title="monitoring-web" \
       org.opencontainers.image.licenses="MIT"
 # OS security fixes released after the base image was built (e.g. libexpat).
