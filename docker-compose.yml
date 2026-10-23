@@ -177,7 +177,7 @@ services:
 
   grafana:
     <<: *hardening
-    image: grafana/grafana:13.2.2
+    image: grafana/grafana:13.2.4
     restart: unless-stopped
     depends_on:
       prometheus:
