@@ -157,7 +157,7 @@ services:
 
   prometheus:
     <<: *hardening
-    image: prom/prometheus:v3.14.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
