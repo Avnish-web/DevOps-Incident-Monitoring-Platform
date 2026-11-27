@@ -62,7 +62,7 @@ services:
 
   redis:
     <<: *hardening
-    image: redis:8.10.2-alpine
+    image: redis:8.12.0-alpine
     restart: unless-stopped
     # Password required; no persistence needed (sessions and rate-limit counters are ephemeral).
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}", "--save", "", "--appendonly", "no"]
